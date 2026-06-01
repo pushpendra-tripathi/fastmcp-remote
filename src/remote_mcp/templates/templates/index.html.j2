@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ service_name }} MCP</title>
+    <meta name="description" content="Connect {{ service_name }} to Claude, Cursor, or any MCP-compatible AI tool and access your data directly from your AI workflow.">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --primary:      #1a56db;
+            --primary-hover:#1648c2;
+            --charcoal:     #212529;
+            --grey:         #6c757d;
+            --border:       #dee2e6;
+            --white:        #ffffff;
+            --light-bg:     #f0f4ff;
+            --hero-grad:    linear-gradient(170deg, #ffffff 0%, #e8eeff 60%, #d8e4ff 100%);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 16px;
+            line-height: 1.6;
+            color: var(--charcoal);
+            background: var(--white);
+        }
+
+        .container {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 0 2.7rem;
+        }
+
+        /* ── Sticky Header ── */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.9rem 0;
+        }
+
+        .logo-link {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--charcoal);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .nav-right a {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--charcoal);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-right a:hover { color: var(--primary); }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            display: inline-block;
+            background: var(--primary);
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.95rem;
+            padding: 0.65rem 1.75rem;
+            border-radius: 720px;
+            text-decoration: none;
+            transition: background 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+
+        /* ── Hero ── */
+        .hero {
+            background: var(--hero-grad);
+            padding: 5.5rem 0 4.5rem;
+        }
+
+        .hero h1 {
+            font-size: 2.75rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: var(--charcoal);
+            margin-bottom: 1.25rem;
+            max-width: 680px;
+        }
+
+        .hero p {
+            font-size: 1.1rem;
+            color: var(--grey);
+            max-width: 600px;
+            margin-bottom: 2rem;
+        }
+
+        /* ── Main content area ── */
+        main {
+            background: var(--light-bg);
+        }
+
+        .content-area {
+            padding: 3rem 0 5rem;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            padding: 2.5rem 2.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: var(--charcoal);
+            margin-bottom: 0.75rem;
+        }
+
+        .card h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--charcoal);
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card h3::before {
+            content: '';
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .card p {
+            color: var(--grey);
+            font-size: 0.97rem;
+            margin-bottom: 1rem;
+        }
+
+        .card ol, .card ul {
+            color: var(--grey);
+            font-size: 0.97rem;
+            padding-left: 1.4rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .card li { margin-bottom: 0.4rem; }
+
+        .card strong { color: var(--charcoal); }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.88em;
+            background: #f1f3f5;
+            color: #c2185b;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .code-block {
+            background: #212529;
+            color: #f8f9fa;
+            border-radius: 6px;
+            padding: 1.25rem 1.5rem;
+            overflow-x: auto;
+            margin: 0.75rem 0 1.25rem;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .section-label {
+            display: inline-block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--primary);
+            background: rgba(26, 86, 219, 0.08);
+            border: 1px solid rgba(26, 86, 219, 0.25);
+            border-radius: 720px;
+            padding: 0.2rem 0.75rem;
+            margin-bottom: 0.85rem;
+        }
+
+        /* ── Footer ── */
+        footer {
+            background: var(--white);
+            border-top: 1px solid var(--border);
+            padding: 2.5rem 0;
+        }
+
+        .footer-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.88rem;
+            color: var(--grey);
+        }
+
+        .footer-inner a {
+            color: var(--grey);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-inner a:hover { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <!-- ── Header ── -->
+    <header>
+        <div class="container header-inner">
+            <a href="#" class="logo-link">
+                {{ service_name }}
+            </a>
+            <nav class="nav-right">
+                <a href="mailto:support@example.com">Get Help</a>
+                <a href="#connect" class="btn-primary">Connect Now</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- ── Hero ── -->
+    <section class="hero">
+        <div class="container">
+            <div class="section-label">Model Context Protocol</div>
+            <h1>{{ service_name }}, direct to your AI.</h1>
+            <p>Connect {{ service_name }} to Claude, Cursor, or any MCP-compatible tool and access your data directly in your AI workflow — no tab switching, no exports.</p>
+            <a href="#connect" class="btn-primary">Get Connected →</a>
+        </div>
+    </section>
+
+    <!-- ── Main Content ── -->
+    <main>
+        <div class="container content-area">
+
+            <!-- What is MCP -->
+            <div class="card">
+                <h2>What is MCP?</h2>
+                <p>Model Context Protocol (MCP) is an open standard that lets AI tools connect to external data sources. Think of it as a universal plug — once an AI tool supports MCP it can connect to any MCP server with just a URL, and your AI can access {{ service_name }} data natively without switching tabs.</p>
+            </div>
+
+            <!-- Before you start -->
+            <div class="card">
+                <h2>Before you start</h2>
+                <p>You'll need a {{ service_name }} account. You will authenticate your AI tool using your existing {{ service_name }} credentials via a secure <strong>OAuth2</strong> flow.</p>
+            </div>
+
+            <!-- How to Connect -->
+            <div id="connect" class="card">
+                <h2>How to Connect</h2>
+
+                <!-- 1. Claude.ai web -->
+                <h3>1. Connect via Claude.ai (Web)</h3>
+                <p>The simplest setup for teams and individual users.</p>
+
+                <p><strong>For Individual Users:</strong></p>
+                <ol>
+                    <li>In Claude, go to <strong>Settings → Connectors</strong>.</li>
+                    <li>Click <strong>Add → Custom → Web</strong>.</li>
+                    <li>Name: <code>{{ service_name }}</code></li>
+                    <li>Remote MCP Server URL: <code>{% raw %}{{ mcp_public_url }}{% endraw %}/sse</code></li>
+                    <li>Click <strong>Connect</strong> and follow the OAuth flow.</li>
+                </ol>
+
+                <!-- 2. Claude Desktop -->
+                <h3>2. Connect via Claude Desktop</h3>
+                <p>Add the following to your <code>claude_desktop_config.json</code>:</p>
+                <div class="code-block"><pre>{
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "{% raw %}{{ mcp_public_url }}{% endraw %}/sse"
+      ]
+    }
+  }
+}</pre></div>
+                <p style="font-size:0.88rem; color:var(--grey);">Config file location (macOS): <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></p>
+
+                <!-- 3. Claude Code CLI -->
+                <h3>3. Connect via Claude Code (CLI)</h3>
+                <p>Add {{ service_name }} to your current project:</p>
+                <div class="code-block"><pre>claude mcp add {{ project_name }} --transport http {% raw %}{{ mcp_public_url }}{% endraw %}/sse</pre></div>
+
+                <!-- 4. Other clients -->
+                <h3>4. Other MCP Clients (Cursor, Windsurf, etc.)</h3>
+                <p>Point any MCP-compatible tool to:</p>
+                <div class="code-block"><pre>{% raw %}{{ mcp_public_url }}{% endraw %}/sse</pre></div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- ── Footer ── -->
+    <footer>
+        <div class="container footer-inner">
+            <span>&copy; {% raw %}{{ year }}{% endraw %} {{ service_name }}. All rights reserved.</span>
+            <div>
+                <a href="#">{{ service_name }}</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

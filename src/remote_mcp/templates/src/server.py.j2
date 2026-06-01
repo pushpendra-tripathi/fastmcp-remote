@@ -1,0 +1,337 @@
+import logging
+import logging.handlers
+import os
+from pathlib import Path
+
+import httpx
+import uvicorn
+from fastmcp import FastMCP
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Mount, Route
+from starlette.templating import Jinja2Templates
+
+from src.config.settings import settings
+from src.core.app_state import lifespan
+
+templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
+logger = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    """Configure rotating file logger + console logger. Idempotent."""
+    os.makedirs(settings.log_dir, exist_ok=True)
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+
+    if any(getattr(h, "_{{ project_slug }}", False) for h in root.handlers):
+        return
+
+    fmt = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)-8s] %(name)s %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
+
+    ch = logging.StreamHandler()
+    ch.setFormatter(fmt)
+    setattr(ch, "_{{ project_slug }}", True)
+    root.addHandler(ch)
+
+    fh = logging.handlers.RotatingFileHandler(
+        os.path.join(settings.log_dir, "{{ project_slug }}_mcp.log"),
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+    )
+    fh.setFormatter(fmt)
+    setattr(fh, "_{{ project_slug }}", True)
+    root.addHandler(fh)
+
+
+# ── FastMCP Server ────────────────────────────────────────────────────────────
+
+mcp = FastMCP(
+    "{{ service_name }}",
+    instructions="""You are connected to the {{ service_name }} MCP server.
+
+{{ service_name }} provides AI-native access to the {{ service_name }} API.
+
+## Authentication
+All tools require an OAuth Bearer token in the `Authorization: Bearer <token>` header.
+The token is obtained via OAuth 2.0 from the {{ service_name }} Identity Provider.
+""",
+    lifespan=lifespan,
+)
+
+# Mount tool/resource/skill routers here as they are built:
+# from src.tools.example import example_router
+# mcp.mount(example_router)
+
+
+# ── Health endpoint ───────────────────────────────────────────────────────────
+
+
+async def health(_: Request) -> JSONResponse:
+    return JSONResponse({"status": "ok", "service": "{{ service_name }} MCP", "version": "1.0.0"})
+
+
+# ── OAuth Protected Resource Metadata (RFC 9728) ─────────────────────────────
+
+
+async def oauth_protected_resource(_: Request) -> JSONResponse:
+    return JSONResponse(
+        {
+            "resource": settings.mcp_public_url.rstrip("/"),
+            "authorization_servers": [settings.oauth_issuer_url.rstrip("/")],
+            "bearer_methods_supported": ["header"],
+            "scopes_supported": ["read"],
+        }
+    )
+
+
+# ── Static UI / Root ──────────────────────────────────────────────────────────
+
+
+async def root_ui(request: Request):
+    """Serve the static marketing / landing page at the root URL."""
+    from datetime import datetime
+
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={
+            "year": datetime.now().year,
+            "mcp_public_url": settings.mcp_public_url.removesuffix("/mcp").removesuffix("/sse").rstrip("/"),
+        },
+    )
+
+
+# ── OAuth Authorization Server Metadata (RFC 8414) ───────────────────────────
+
+
+async def oauth_discovery(_: Request) -> JSONResponse:
+    issuer = settings.oauth_issuer_url.rstrip("/")
+    payload = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/o/authorize/",
+        "token_endpoint": f"{issuer}/o/token/",
+        "registration_endpoint": f"{issuer}/o/register/",
+        "response_types_supported": ["code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
+        "token_endpoint_auth_methods_supported": [
+            "client_secret_basic",
+            "client_secret_post",
+        ],
+        "code_challenge_methods_supported": ["S256"],
+        "scopes_supported": ["read"],
+        "access_token_lifetime": 36000,
+    }
+    if settings.logo_uri:
+        payload["logo_uri"] = settings.logo_uri
+    return JSONResponse(payload)
+
+
+# ── HTTP Auth Middleware ──────────────────────────────────────────────────────
+
+
+class RequireAuthMiddleware(BaseHTTPMiddleware):
+    """
+    HTTP-level middleware to enforce OAuth authentication.
+
+    On the SSE GET handshake we additionally verify the token against the
+    backend (via AUTH_PROBE_PATH) so mcp-remote sees a 401 immediately and
+    triggers re-auth before expired tokens reach tools. Network errors during
+    validation are treated as auth failures (fail-closed).
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        if (
+            path == "/"
+            or path.startswith("/health")
+            or ".well-known" in path
+            or any(x in path for x in ["favicon", "apple-touch-icon", "android-chrome"])
+        ):
+            return await call_next(request)
+
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        auth_header = request.headers.get("authorization")
+        if not auth_header:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": "Missing Authorization header. "
+                    "Token is required to access {{ service_name }} MCP."
+                },
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if request.method == "GET" and path.rstrip("/") == "/sse" and settings.auth_probe_enabled:
+            probe_url = f"{settings.api_base_url.rstrip('/')}{settings.auth_probe_path}"
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.get(
+                        probe_url,
+                        headers={"Authorization": auth_header},
+                    )
+
+                    if response.status_code == 401:
+                        logger.warning(
+                            "Rejecting invalid/expired token during connection handshake."
+                        )
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "error": "Invalid or expired token. "
+                                "Please authenticate again or refresh."
+                            },
+                            headers={"WWW-Authenticate": "Bearer"},
+                        )
+            except httpx.RequestError as e:
+                logger.error("Network error validating token during handshake: %s", e)
+                return JSONResponse(
+                    status_code=503,
+                    content={"error": f"Token validation unavailable: {e}"},
+                )
+
+        return await call_next(request)
+
+
+class TelemetryMiddleware(BaseHTTPMiddleware):
+    """Record connection-level events (auth failures, rate limits, SSE connects)."""
+
+    async def dispatch(self, request: Request, call_next):
+        from src.core.telemetry import TelemetryEvent, hash_token, telemetry_service
+
+        path = request.url.path
+        method = request.method
+        user_id = "anonymous"
+
+        auth_header = request.headers.get("authorization")
+        if auth_header:
+            try:
+                user_id = hash_token(auth_header)
+            except Exception:
+                pass
+
+        response = await call_next(request)
+
+        event_type = None
+        if response.status_code == 401:
+            event_type = "auth_failure"
+        elif response.status_code == 429:
+            event_type = "rate_limit"
+        elif method == "GET" and path.rstrip("/") == "/sse":
+            event_type = "connection"
+
+        if event_type:
+            await telemetry_service.record_event(
+                TelemetryEvent(
+                    event_type=event_type,
+                    user_id=user_id,
+                    client_ip=request.client.host if request.client else None,
+                    user_agent=request.headers.get("user-agent"),
+                    path=path,
+                    extra={"method": method, "status": response.status_code},
+                )
+            )
+
+        return response
+
+
+# ── ASGI App ──────────────────────────────────────────────────────────────────
+
+
+def _allowed_origins() -> list[str]:
+    raw = (settings.allowed_origins or "").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+def create_app():
+    """Create the combined ASGI application with health endpoint + MCP server."""
+    configure_logging()
+    logger.info("{{ service_name }} MCP starting...")
+
+    mcp_app = mcp.http_app(path="/sse")
+
+    _app = Starlette(
+        routes=[
+            Route("/health", health, methods=["GET"]),
+            Route(
+                "/.well-known/oauth-protected-resource",
+                oauth_protected_resource,
+                methods=["GET"],
+            ),
+            Route(
+                "/.well-known/oauth-protected-resource/sse",
+                oauth_protected_resource,
+                methods=["GET"],
+            ),
+            Route(
+                "/sse/.well-known/oauth-protected-resource",
+                oauth_protected_resource,
+                methods=["GET"],
+            ),
+            Route(
+                "/.well-known/oauth-authorization-server",
+                oauth_discovery,
+                methods=["GET"],
+            ),
+            Route(
+                "/.well-known/oauth-authorization-server/sse",
+                oauth_discovery,
+                methods=["GET"],
+            ),
+            Route(
+                "/sse/.well-known/oauth-authorization-server",
+                oauth_discovery,
+                methods=["GET"],
+            ),
+            Route("/.well-known/openid-configuration", oauth_discovery, methods=["GET"]),
+            Route("/.well-known/openid-configuration/sse", oauth_discovery, methods=["GET"]),
+            Route("/sse/.well-known/openid-configuration", oauth_discovery, methods=["GET"]),
+            Route("/", root_ui, methods=["GET"]),
+        ],
+        middleware=[
+            Middleware(
+                CORSMiddleware,
+                allow_origins=_allowed_origins(),
+                allow_methods=["*"],
+                allow_headers=["*"],
+            ),
+            Middleware(RequireAuthMiddleware),
+            Middleware(TelemetryMiddleware),
+        ],
+        lifespan=mcp_app.lifespan,
+    )
+
+    _app.routes.append(Mount("/", app=mcp_app))
+
+    return _app
+
+
+app = create_app()
+
+
+def run():
+    """CLI entry point for development."""
+    uvicorn.run(
+        "src.server:app",
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+        lifespan="on",
+        reload=True,
+    )
+
+
+if __name__ == "__main__":
+    run()

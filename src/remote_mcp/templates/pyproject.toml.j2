@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ service_name }} MCP server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+keywords = ["mcp", "fastmcp", "remote"]
+dependencies = [
+    "fastmcp>=3.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.11",
+    "pydantic-settings>=2.9",
+    "python-dotenv>=1.1",
+    "uvicorn[standard]>=0.34",
+    "tenacity>=9.0",
+    "starlette>=0.47",
+    "rich>=14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.25",
+    "respx>=0.22",
+    "httpx",
+    "pytest-cov>=6",
+]
+
+[project.scripts]
+{{ project_slug }} = "src.server:run"
+
+[tool.setuptools]
+packages = [
+    "src",
+    "src.config",
+    "src.core",
+    "src.tools",
+    "src.resources",
+    "src.skills",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 100

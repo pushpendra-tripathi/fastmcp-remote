@@ -1,0 +1,70 @@
+# {{ service_name }} MCP — Deployment
+
+## Local Development
+
+```bash
+cp env.example .env
+# Edit .env with your values
+python -m venv venv && source venv/bin/activate
+pip install -e ".[dev]"
+uvicorn asgi:application --reload --host 127.0.0.1 --port 8001 --lifespan on
+```
+
+Server starts at http://localhost:8001. MCP endpoint: http://localhost:8001/sse.
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_BASE_URL` | `https://api.example.com` | Upstream API URL |
+| `AUTH_PROBE_PATH` | `/health/` | Endpoint to validate Bearer tokens |
+| `AUTH_PROBE_ENABLED` | `false` | Enable token probe on SSE handshake |
+| `MCP_PUBLIC_URL` | `http://localhost:8001/mcp` | Public MCP URL (shown in landing page) |
+| `OAUTH_ISSUER_URL` | `http://localhost:8001` | OAuth issuer for RFC 8414 discovery |
+| `LOGO_URI` | `` | Logo URI for OAuth discovery (optional) |
+| `HOST` | `127.0.0.1` | Bind host |
+| `PORT` | `8001` | Bind port |
+| `LOG_LEVEL` | `INFO` | Logging level |
+| `ALLOWED_ORIGINS` | `https://claude.ai,...` | CORS allowed origins |
+| `TELEMETRY_ENABLED` | `true` | Enable JSONL telemetry |
+
+## Production (Render / Railway / Fly.io)
+
+Set environment variables in your platform dashboard. Key production settings:
+
+```
+API_BASE_URL=https://your-api.example.com
+MCP_PUBLIC_URL=https://your-mcp-server.example.com/mcp
+OAUTH_ISSUER_URL=https://your-api.example.com
+AUTH_PROBE_ENABLED=true
+AUTH_PROBE_PATH=/health/
+HOST=0.0.0.0
+PORT=8001
+```
+
+Start command:
+```
+uvicorn asgi:application --host 0.0.0.0 --port 8001 --workers 2 --lifespan on
+```
+
+## Connecting to Claude
+
+**Claude.ai (Web):** Settings → Connectors → Add → Custom → Web
+- Remote MCP Server URL: `https://your-mcp-server.example.com/mcp/sse`
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+```json
+{
+  "mcpServers": {
+    "{{ project_name }}": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@latest", "https://your-mcp-server.example.com/mcp/sse"]
+    }
+  }
+}
+```
+
+**Claude Code (CLI):**
+```bash
+claude mcp add {{ project_name }} --transport http https://your-mcp-server.example.com/mcp/sse
+```

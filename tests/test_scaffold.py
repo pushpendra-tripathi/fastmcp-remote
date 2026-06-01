@@ -1,0 +1,81 @@
+import pytest
+from pathlib import Path
+
+from remote_mcp.scaffold import scaffold_project
+
+CONTEXT = {
+    "project_name": "my-project",
+    "project_slug": "my_project",
+    "service_name": "My Project",
+    "class_prefix": "MyProject",
+}
+
+
+def test_scaffold_produces_complete_file_tree(tmp_path):
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+
+    assert (target / "src" / "server.py").exists()
+    assert (target / "src" / "core" / "errors.py").exists()
+    assert (target / "src" / "core" / "telemetry.py").exists()
+    assert (target / "src" / "config" / "settings.py").exists()
+    assert (target / "pyproject.toml").exists()
+    assert (target / "asgi.py").exists()
+    assert (target / "tests" / "conftest.py").exists()
+
+    # No .j2 files should appear in output tree
+    j2_files = list(target.rglob("*.j2"))
+    assert j2_files == [], f"Unexpected .j2 files in output: {j2_files}"
+
+
+def test_scaffold_key_content_substitutions(tmp_path):
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+
+    errors_content = (target / "src" / "core" / "errors.py").read_text()
+    assert "MyProjectError" in errors_content
+    assert "MY_PROJECT_ERROR" in errors_content
+    assert "EnineSites" not in errors_content
+    assert "{{ class_prefix }}" not in errors_content
+
+    telemetry_content = (target / "src" / "core" / "telemetry.py").read_text()
+    assert "my_project_telemetry" in telemetry_content
+    assert "{{ project_slug }}" not in telemetry_content
+
+    server_content = (target / "src" / "server.py").read_text()
+    assert "My Project" in server_content
+    assert "{{ service_name }}" not in server_content
+
+    pyproject_content = (target / "pyproject.toml").read_text()
+    assert 'name = "my-project"' in pyproject_content
+
+    settings_content = (target / "src" / "config" / "settings.py").read_text()
+    assert "user_agent" in settings_content
+
+    env_example_content = (target / "env.example").read_text()
+    assert "my_project-mcp/1.0" in env_example_content
+
+
+def test_scaffold_custom_service_name_class_prefix(tmp_path):
+    context = {
+        "project_name": "my-awesome-tool",
+        "project_slug": "my_awesome_tool",
+        "service_name": "My Awesome Tool",
+        "class_prefix": "MyAwesomeTool",
+    }
+    target = tmp_path / "my-awesome-tool"
+    scaffold_project(target, context)
+
+    errors_content = (target / "src" / "core" / "errors.py").read_text()
+    assert "MyAwesomeTool" in errors_content
+
+
+def test_scaffold_existing_dir_raises_and_no_files_written(tmp_path):
+    existing = tmp_path / "existing"
+    existing.mkdir()
+
+    with pytest.raises(FileExistsError):
+        scaffold_project(existing, CONTEXT)
+
+    # Directory should be empty — no files were written
+    assert list(existing.iterdir()) == []

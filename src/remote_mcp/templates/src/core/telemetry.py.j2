@@ -1,0 +1,84 @@
+import hashlib
+import logging
+import logging.handlers
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+from src.config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+class TelemetryEvent(BaseModel):
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    event_type: str  # tool_call, connection, auth_failure, rate_limit
+    user_id: Optional[str] = None
+    tool_name: Optional[str] = None
+    success: Optional[bool] = None
+    error_type: Optional[str] = None
+    latency_ms: Optional[float] = None
+    response_size_bytes: Optional[int] = None
+    client_ip: Optional[str] = None
+    user_agent: Optional[str] = None
+    path: Optional[str] = None
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+def hash_token(token: str) -> str:
+    if not token:
+        return "anonymous"
+    raw = token[7:].strip() if token.lower().startswith("bearer ") else token.strip()
+    if not raw:
+        return "anonymous"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+
+class TelemetryService:
+    _instance: Optional["TelemetryService"] = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self.enabled = settings.telemetry_enabled
+        self._telemetry_logger: Optional[logging.Logger] = None
+        if self.enabled:
+            self._setup_logger()
+        self._initialized = True
+
+    def _setup_logger(self):
+        log_path = Path(settings.telemetry_log_path)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._telemetry_logger = logging.getLogger("{{ project_slug }}_telemetry")
+        self._telemetry_logger.setLevel(logging.INFO)
+        self._telemetry_logger.propagate = False
+        if any(getattr(h, "_{{ project_slug }}_telemetry", False) for h in self._telemetry_logger.handlers):
+            return
+        handler = logging.handlers.RotatingFileHandler(
+            str(log_path),
+            maxBytes=settings.telemetry_max_bytes,
+            backupCount=settings.telemetry_backup_count,
+        )
+        handler._{{ project_slug }}_telemetry = True
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        self._telemetry_logger.addHandler(handler)
+        logger.info("Telemetry service initialised at %s", log_path)
+
+    async def record_event(self, event: TelemetryEvent) -> None:
+        if not self.enabled or not self._telemetry_logger:
+            return
+        try:
+            self._telemetry_logger.info(event.model_dump_json(exclude_none=True))
+        except Exception as e:
+            logger.debug("Failed to record telemetry event: %s", e)
+
+
+telemetry_service = TelemetryService()

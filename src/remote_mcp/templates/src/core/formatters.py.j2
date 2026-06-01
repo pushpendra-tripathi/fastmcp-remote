@@ -1,0 +1,8 @@
+from src.core.errors import {{ class_prefix }}Error
+
+
+def format_error(error: Exception) -> str:
+    """Format a {{ class_prefix }}Error (or any exception) as a Markdown string for MCP tools."""
+    if isinstance(error, {{ class_prefix }}Error):
+        return error.to_mcp_string()
+    return f"❌ **Unexpected Error**: {error}"

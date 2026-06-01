@@ -1,0 +1,68 @@
+from typing import Optional
+
+
+class {{ class_prefix }}Error(Exception):
+    http_status: int = 500
+    error_code: str = "{{ project_slug | upper }}_ERROR"
+
+    def __init__(self, message: str, details: Optional[str] = None):
+        super().__init__(message)
+        self.details = details
+
+    def to_dict(self) -> dict:
+        d = {"error": self.error_code, "message": str(self)}
+        if self.details:
+            d["details"] = self.details
+        return d
+
+    def to_mcp_string(self) -> str:
+        msg = f"❌ **{self.error_code}**: {self}"
+        if self.details:
+            msg += f"\n\n**Details**: {self.details}"
+        return msg
+
+
+class AuthError({{ class_prefix }}Error):
+    http_status = 401
+    error_code = "AUTH_ERROR"
+
+    def to_mcp_string(self) -> str:
+        return (
+            f"🔐 **Authentication Required**\n\n"
+            f"{self}\n\n"
+            f"**How to fix**: Pass your API token in the "
+            f"`Authorization: Bearer <token>` header."
+        )
+
+
+class ForbiddenError({{ class_prefix }}Error):
+    http_status = 403
+    error_code = "PERMISSION_DENIED"
+
+    def to_mcp_string(self) -> str:
+        return (
+            f"🚫 **Insufficient Permissions**\n\n"
+            f"{self}\n\n"
+            f"Your account may not include access to this resource."
+        )
+
+
+class ValidationError({{ class_prefix }}Error):
+    http_status = 422
+    error_code = "VALIDATION_ERROR"
+
+
+class BackendError({{ class_prefix }}Error):
+    http_status = 502
+    error_code = "BACKEND_ERROR"
+
+
+class RateLimitError({{ class_prefix }}Error):
+    http_status = 429
+    error_code = "RATE_LIMITED"
+
+    def to_mcp_string(self) -> str:
+        return (
+            "⚡ **Rate Limited**\n\n"
+            "Too many requests. Please wait a moment before retrying."
+        )

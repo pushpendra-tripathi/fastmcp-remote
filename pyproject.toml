@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remote-mcp"
+version = "0.1.0"
+description = "One command to a production-ready remote MCP server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Pushpendra Tripathi" }]
+keywords = ["mcp", "fastmcp", "remote", "oauth", "scaffold", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "typer>=0.12",
+    "rich>=14.0",
+    "jinja2>=3.1",
+]
+
+[project.scripts]
+remote-mcp = "remote_mcp.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/pushpendra-tripathi/remote-mcp"
+Repository = "https://github.com/pushpendra-tripathi/remote-mcp"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/remote_mcp"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
