@@ -21,7 +21,7 @@ def test_derive_context_multi_word_kebab():
 def test_version_flag():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.1" in result.output
+    assert "0.1.2" in result.output
 
 
 def test_new_command_calls_scaffold(monkeypatch, tmp_path):
