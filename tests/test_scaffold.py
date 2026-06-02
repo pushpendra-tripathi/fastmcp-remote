@@ -15,10 +15,27 @@ def test_scaffold_produces_complete_file_tree(tmp_path):
     target = tmp_path / "my-project"
     scaffold_project(target, CONTEXT)
 
+    # Core server files
     assert (target / "src" / "server.py").exists()
+    assert (target / "src" / "app.py").exists()
+
+    # Views
+    assert (target / "src" / "views" / "__init__.py").exists()
+    assert (target / "src" / "views" / "health.py").exists()
+    assert (target / "src" / "views" / "oauth.py").exists()
+    assert (target / "src" / "views" / "root.py").exists()
+
+    # Middleware
+    assert (target / "src" / "middleware" / "__init__.py").exists()
+    assert (target / "src" / "middleware" / "auth.py").exists()
+    assert (target / "src" / "middleware" / "telemetry.py").exists()
+
+    # Core
     assert (target / "src" / "core" / "errors.py").exists()
     assert (target / "src" / "core" / "telemetry.py").exists()
     assert (target / "src" / "config" / "settings.py").exists()
+
+    # Project root
     assert (target / "pyproject.toml").exists()
     assert (target / "asgi.py").exists()
     assert (target / "tests" / "conftest.py").exists()
@@ -45,6 +62,23 @@ def test_scaffold_key_content_substitutions(tmp_path):
     server_content = (target / "src" / "server.py").read_text()
     assert "My Project" in server_content
     assert "{{ service_name }}" not in server_content
+
+    app_content = (target / "src" / "app.py").read_text()
+    assert "My Project" in app_content
+    assert "src.app:app" in app_content
+    assert "{{ service_name }}" not in app_content
+
+    auth_content = (target / "src" / "middleware" / "auth.py").read_text()
+    assert "My Project" in auth_content
+    assert "_UNPROTECTED_PATHS" in auth_content
+    assert "{{ service_name }}" not in auth_content
+
+    health_content = (target / "src" / "views" / "health.py").read_text()
+    assert "My Project" in health_content
+    assert "{{ service_name }}" not in health_content
+
+    assert "src.app import app" in (target / "asgi.py").read_text()
+    assert "src.app import app" in (target / "tests" / "conftest.py").read_text()
 
     pyproject_content = (target / "pyproject.toml").read_text()
     assert 'name = "my-project"' in pyproject_content

@@ -1,0 +1,100 @@
+"""{{ service_name }} MCP — Starlette app factory.
+
+Responsible for HTTP wiring only:
+  - Route registration
+  - Middleware stack (CORS, auth, telemetry)
+  - ASGI app creation
+
+FastMCP instance and tool mounts live in src/server.py.
+"""
+
+import logging
+
+import uvicorn
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Mount, Route
+
+from src.config.settings import settings
+from src.middleware import RequireAuthMiddleware, TelemetryMiddleware
+from src.server import configure_logging, mcp
+from src.views.health import health
+from src.views.oauth import oauth_discovery, oauth_protected_resource
+from src.views.root import root_ui
+
+logger = logging.getLogger(__name__)
+
+_OAUTH_DISCOVERY_PATHS = [
+    "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-authorization-server/sse",
+    "/sse/.well-known/oauth-authorization-server",
+    "/.well-known/openid-configuration",
+    "/.well-known/openid-configuration/sse",
+    "/sse/.well-known/openid-configuration",
+]
+
+_OAUTH_RESOURCE_PATHS = [
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/sse",
+    "/sse/.well-known/oauth-protected-resource",
+]
+
+
+def _allowed_origins() -> list[str]:
+    raw = (settings.allowed_origins or "").strip()
+    if not raw or raw == "*":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+def create_app():
+    """Create the combined Starlette + FastMCP ASGI application."""
+    configure_logging()
+    logger.info("{{ service_name }} MCP starting...")
+
+    mcp_app = mcp.http_app(path="/sse")
+
+    routes = [
+        Route("/health", health, methods=["GET"]),
+        Route("/", root_ui, methods=["GET"]),
+        *[Route(p, oauth_protected_resource, methods=["GET"]) for p in _OAUTH_RESOURCE_PATHS],
+        *[Route(p, oauth_discovery, methods=["GET"]) for p in _OAUTH_DISCOVERY_PATHS],
+    ]
+
+    _app = Starlette(
+        routes=routes,
+        middleware=[
+            Middleware(
+                CORSMiddleware,
+                allow_origins=_allowed_origins(),
+                allow_methods=["*"],
+                allow_headers=["*"],
+            ),
+            Middleware(RequireAuthMiddleware),
+            Middleware(TelemetryMiddleware),
+        ],
+        lifespan=mcp_app.lifespan,
+    )
+
+    _app.routes.append(Mount("/", app=mcp_app))
+    return _app
+
+
+app = create_app()
+
+
+def run():
+    """CLI entry point for development."""
+    uvicorn.run(
+        "src.app:app",
+        host=settings.host,
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+        lifespan="on",
+        reload=True,
+    )
+
+
+if __name__ == "__main__":
+    run()

@@ -9,4 +9,4 @@ Usage:
   uvicorn asgi:application --host 0.0.0.0 --port 8001 --workers 4 --lifespan on
 """
 
-from src.server import app as application  # noqa: F401
+from src.app import app as application  # noqa: F401

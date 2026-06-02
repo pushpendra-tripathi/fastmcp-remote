@@ -50,14 +50,22 @@ Server is live at `http://localhost:8001`. MCP endpoint: `http://localhost:8001/
 ```
 my-project/
 ├── src/
-│   ├── server.py              # FastMCP("My Project") + middleware stack + OAuth discovery
+│   ├── server.py              # FastMCP("My Project") instance + tool mounts
+│   ├── app.py                 # Starlette factory — routes, middleware, ASGI wiring
 │   ├── config/settings.py     # Pydantic BaseSettings — all config via env vars
 │   ├── core/
 │   │   ├── auth.py            # extract_bearer_token() — OAuth pass-through
 │   │   ├── errors.py          # MyProjectError hierarchy
-│   │   ├── http_client.py     # api_get, api_post + tenacity retry
+│   │   ├── http_client.py     # api_get/post/patch/put/delete/upload + tenacity retry
 │   │   ├── telemetry.py       # anonymized SHA-256 JSONL event log
 │   │   └── handlers.py        # @tool_handler decorator, get_client_and_token()
+│   ├── middleware/
+│   │   ├── auth.py            # RequireAuthMiddleware — Bearer enforcement + probe
+│   │   └── telemetry.py       # TelemetryMiddleware — auth failures, connections
+│   ├── views/
+│   │   ├── health.py          # GET /health
+│   │   ├── oauth.py           # RFC 8414 + RFC 9728 discovery endpoints
+│   │   └── root.py            # landing page at /
 │   └── tools/example.py       # echo tool — your first tool, ready to replace
 ├── tests/
 │   ├── test_auth.py           # extract_bearer_token edge cases
@@ -75,11 +83,13 @@ my-project/
 | Module | What it provides |
 |--------|-----------------|
 | `core/auth.py` | `extract_bearer_token(ctx)` — forward Bearer token verbatim to your backend |
-| `core/http_client.py` | `api_get`, `api_post` — pooled httpx client with tenacity retry |
+| `core/http_client.py` | `api_get`, `api_post`, `api_patch`, `api_put`, `api_delete`, `api_upload` — pooled httpx client with tenacity retry |
 | `core/errors.py` | `MyProjectError` + Auth, Forbidden, Validation, Backend, RateLimit subclasses |
 | `core/telemetry.py` | Rotating JSONL log, user IDs hashed (SHA-256, non-reversible) |
 | `core/handlers.py` | `@tool_handler` — catches errors, formats responses, records telemetry |
-| `server.py` | CORS → Auth → Telemetry middleware, RFC 8414 + RFC 9728 discovery, landing page |
+| `middleware/auth.py` | CORS → Auth → optional backend token probe on SSE connect |
+| `middleware/telemetry.py` | Connection-level event recording (auth failures, rate limits, SSE connects) |
+| `views/` | Health, OAuth discovery (RFC 8414 + 9728), landing page — each in its own file |
 
 Nothing is forced on you. Delete what you don't need.
 
