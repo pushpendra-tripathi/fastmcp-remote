@@ -1,5 +1,5 @@
+
 import pytest
-from pathlib import Path
 
 from remote_mcp.scaffold import scaffold_project
 
@@ -70,7 +70,7 @@ def test_scaffold_key_content_substitutions(tmp_path):
 
     auth_content = (target / "src" / "middleware" / "auth.py").read_text()
     assert "My Project" in auth_content
-    assert "_UNPROTECTED_PATHS" in auth_content
+    assert "_UNPROTECTED_EXACT" in auth_content
     assert "{{ service_name }}" not in auth_content
 
     health_content = (target / "src" / "views" / "health.py").read_text()
@@ -104,12 +104,21 @@ def test_scaffold_custom_service_name_class_prefix(tmp_path):
     assert "MyAwesomeTool" in errors_content
 
 
-def test_scaffold_existing_dir_raises_and_no_files_written(tmp_path):
+def test_scaffold_non_empty_dir_raises(tmp_path):
     existing = tmp_path / "existing"
     existing.mkdir()
+    (existing / "untouchable.txt").write_text("dont delete me")
 
     with pytest.raises(FileExistsError):
         scaffold_project(existing, CONTEXT)
 
-    # Directory should be empty — no files were written
-    assert list(existing.iterdir()) == []
+    # Pre-existing file must remain untouched
+    assert (existing / "untouchable.txt").read_text() == "dont delete me"
+
+
+def test_scaffold_empty_dir_succeeds(tmp_path):
+    """Allow scaffolding into an existing empty directory (e.g. --into .)."""
+    target = tmp_path / "empty"
+    target.mkdir()
+    scaffold_project(target, CONTEXT)
+    assert (target / "src" / "server.py").exists()

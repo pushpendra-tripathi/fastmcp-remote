@@ -1,15 +1,28 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "{{ project_name }}"
 version = "0.1.0"
 description = "{{ service_name }} MCP server"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = { text = "MIT" }
-keywords = ["mcp", "fastmcp", "remote"]
+keywords = ["mcp", "fastmcp", "remote", "{{ project_slug }}"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+]
 dependencies = [
     "fastmcp>=3.0",
     "httpx>=0.28.1",
@@ -19,6 +32,7 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "tenacity>=9.0",
     "starlette>=0.47",
+    "jinja2>=3.1",
     "rich>=14.0",
 ]
 
@@ -29,29 +43,26 @@ dev = [
     "respx>=0.22",
     "httpx",
     "pytest-cov>=6",
+    "ruff>=0.7",
 ]
 
 [project.scripts]
-{{ project_slug }} = "src.server:run"
+{{ project_slug }} = "src.app:run"
 
-[tool.setuptools]
-packages = [
-    "src",
-    "src.config",
-    "src.core",
-    "src.tools",
-    "src.resources",
-    "src.skills",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py312"]
+target-version = "py310"
 
-[tool.isort]
-profile = "black"
-line_length = 100
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ASYNC"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

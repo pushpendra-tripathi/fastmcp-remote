@@ -4,18 +4,30 @@ build-backend = "hatchling.build"
 
 [project]
 name = "remote-mcp"
-version = "0.1.2"
-description = "One command to a production-ready remote MCP server"
+version = "0.2.0"
+description = "Scaffold a production-ready remote MCP (Model Context Protocol) server with OAuth, RFC 8414/9728 discovery, retry, telemetry, and tests — in one command. Zero runtime dependency on this package."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Pushpendra Tripathi" }]
-keywords = ["mcp", "fastmcp", "remote", "oauth", "scaffold", "cli"]
+keywords = ["mcp", "fastmcp", "remote", "oauth", "scaffold", "cli", "model-context-protocol", "ai"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Typing :: Typed",
 ]
 dependencies = [
     "typer>=0.12",
@@ -29,6 +41,8 @@ remote-mcp = "remote_mcp.cli:app"
 [project.urls]
 Homepage = "https://github.com/pushpendra-tripathi/remote-mcp"
 Repository = "https://github.com/pushpendra-tripathi/remote-mcp"
+Issues = "https://github.com/pushpendra-tripathi/remote-mcp/issues"
+Changelog = "https://github.com/pushpendra-tripathi/remote-mcp/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [
@@ -38,11 +52,39 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remote_mcp"]
+artifacts = [
+    "src/remote_mcp/templates/**",
+    "src/remote_mcp/snippets/**",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/remote_mcp/**",
+    "tests/**",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "pyproject.toml",
+]
 
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 
 [tool.black]
 line-length = 100
-target-version = ["py312"]
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501", "B008"]  # B008: Typer uses function defaults by design
+
+[tool.ruff.lint.per-file-ignores]
+"src/remote_mcp/templates/**" = ["F", "E", "W", "I", "UP", "B", "SIM", "RUF"]

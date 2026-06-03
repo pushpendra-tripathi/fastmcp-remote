@@ -163,7 +163,7 @@ Full variable list and deploy instructions in `DEPLOYMENT.md`.
 
 ## Requirements
 
-- Python ≥ 3.12
+- Python ≥ 3.10 (this CLI). Generated project supports the same range.
 - FastMCP ≥ 3.0 (installed in the generated project, not this package)
 
 ## License
