@@ -28,8 +28,8 @@ app.add_typer(add_app, name="add")
 
 
 # kebab-case: starts with lowercase letter, lowercase/digit/hyphen, no double hyphen,
-# does not end with hyphen. Length 2-64.
-_KEBAB_RE = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+# does not end with hyphen. Length 2-64 (length enforced separately in validator).
+_KEBAB_RE = re.compile(r"^[a-z](?:[a-z0-9]*(?:-[a-z0-9]+)*)$")
 _SNAKE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
@@ -37,6 +37,8 @@ def _validate_project_name(name: str) -> str:
     name = name.strip()
     if not name:
         raise typer.BadParameter("Project name cannot be empty.")
+    if len(name) < 2:
+        raise typer.BadParameter("Project name too short (min 2 chars).")
     if len(name) > 64:
         raise typer.BadParameter("Project name too long (max 64 chars).")
     if not _KEBAB_RE.match(name):
@@ -106,7 +108,10 @@ def _default_service_name(project_name: str) -> str:
 def new(
     project_name: str = typer.Argument(..., help="Project directory name (kebab-case)"),
     service_name: str | None = typer.Option(
-        None, "--service-name", "-s", help="Human-readable service name (default: derived from project_name)."
+        None,
+        "--service-name",
+        "-s",
+        help="Human-readable service name (default: derived from project_name).",
     ),
     into: Path | None = typer.Option(
         None, "--into", help="Target directory (default: ./<project_name>)."

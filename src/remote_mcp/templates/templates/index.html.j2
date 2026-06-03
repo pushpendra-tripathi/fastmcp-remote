@@ -257,7 +257,7 @@
                 {{ service_name }}
             </a>
             <nav class="nav-right">
-                <a href="mailto:support@example.com">Get Help</a>
+                {% raw %}{% if support_email %}<a href="mailto:{{ support_email }}">Get Help</a>{% endif %}{% endraw %}
                 <a href="#connect" class="btn-primary">Connect Now</a>
             </nav>
         </div>

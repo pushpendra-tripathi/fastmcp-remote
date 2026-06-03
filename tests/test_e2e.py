@@ -65,7 +65,7 @@ def test_scaffolded_project_has_no_pylintrc(tmp_path):
 def test_scaffolded_pyproject_uses_hatchling(tmp_path):
     target = tmp_path / "demo-mcp"
     scaffold_project(target, CONTEXT)
-    content = (target / "pyproject.toml").read_text()
+    content = (target / "pyproject.toml").read_text(encoding="utf-8")
     assert "hatchling" in content
     assert "setuptools" not in content
 
@@ -75,7 +75,7 @@ def test_scaffold_tool_creates_file(tmp_path):
     scaffold_project(target, CONTEXT)
     created = scaffold_tool(target, "search")
     assert created == target / "src" / "tools" / "search.py"
-    content = created.read_text()
+    content = created.read_text(encoding="utf-8")
     assert "search_router = FastMCP" in content
     assert "@tool_handler" in content
 
@@ -99,9 +99,7 @@ def test_scaffolded_project_pytest_passes(tmp_path):
     scaffold_project(target, CONTEXT)
 
     venv = target / ".venv"
-    subprocess.run(
-        [sys.executable, "-m", "venv", str(venv)], check=True, timeout=120
-    )
+    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, timeout=120)
     pip = venv / ("Scripts" if os.name == "nt" else "bin") / "pip"
     py = venv / ("Scripts" if os.name == "nt" else "bin") / "python"
     subprocess.run(
@@ -115,6 +113,8 @@ def test_scaffolded_project_pytest_passes(tmp_path):
         cwd=target,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=180,
     )
     assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"

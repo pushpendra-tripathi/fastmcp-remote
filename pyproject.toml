@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "remote-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "Scaffold a production-ready remote MCP (Model Context Protocol) server with OAuth, RFC 8414/9728 discovery, retry, telemetry, and tests — in one command. Zero runtime dependency on this package."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,11 +43,15 @@ Homepage = "https://github.com/pushpendra-tripathi/remote-mcp"
 Repository = "https://github.com/pushpendra-tripathi/remote-mcp"
 Issues = "https://github.com/pushpendra-tripathi/remote-mcp/issues"
 Changelog = "https://github.com/pushpendra-tripathi/remote-mcp/blob/main/CHANGELOG.md"
+Releases = "https://github.com/pushpendra-tripathi/remote-mcp/releases"
+Documentation = "https://github.com/pushpendra-tripathi/remote-mcp#readme"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-cov>=6",
+    "pytest-timeout>=2.3",
+    "ruff>=0.7",
 ]
 
 [tool.hatch.build.targets.wheel]

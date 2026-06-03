@@ -14,7 +14,10 @@ async def root_ui(request: Request):
         name="index.html",
         context={
             "year": datetime.now().year,
-            "mcp_public_url": settings.mcp_public_url.removesuffix("/mcp").removesuffix("/sse").rstrip("/"),
+            "mcp_public_url": settings.mcp_public_url.removesuffix("/mcp")
+            .removesuffix("/sse")
+            .rstrip("/"),
             "logo_uri": settings.logo_uri,
+            "support_email": settings.support_email,
         },
     )

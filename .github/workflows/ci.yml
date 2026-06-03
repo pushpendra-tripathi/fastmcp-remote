@@ -45,3 +45,17 @@ jobs:
         run: ruff check src tests
       - name: Ruff format check
         run: ruff format --check src tests
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package + pip-audit
+        run: |
+          pip install -e .
+          pip install pip-audit
+      - name: Audit installed dependencies for known CVEs
+        run: pip-audit --strict

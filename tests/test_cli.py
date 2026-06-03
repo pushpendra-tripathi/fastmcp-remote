@@ -28,9 +28,7 @@ def test_version_flag():
     assert __version__ in result.output
 
 
-@pytest.mark.parametrize(
-    "name", ["good", "my-project", "my-awesome-tool", "tool123", "abc-1"]
-)
+@pytest.mark.parametrize("name", ["good", "my-project", "my-awesome-tool", "tool123", "abc-1"])
 def test_validate_project_name_ok(name):
     assert _validate_project_name(name) == name
 
@@ -76,9 +74,7 @@ def test_new_command_yes_skips_prompt(monkeypatch, tmp_path):
         calls.append((target_dir, context))
 
     monkeypatch.setattr("remote_mcp.cli.scaffold_project", fake_scaffold)
-    result = runner.invoke(
-        app, ["new", "my-project", "--yes", "--into", str(tmp_path / "out")]
-    )
+    result = runner.invoke(app, ["new", "my-project", "--yes", "--into", str(tmp_path / "out")])
     assert result.exit_code == 0, result.output
     assert len(calls) == 1
     assert calls[0][1]["project_slug"] == "my_project"
@@ -100,9 +96,7 @@ def test_new_command_service_name_flag(monkeypatch, tmp_path):
 
 
 def test_new_command_validates_name(tmp_path):
-    result = runner.invoke(
-        app, ["new", "Bad_Name", "--yes", "--into", str(tmp_path / "out")]
-    )
+    result = runner.invoke(app, ["new", "Bad_Name", "--yes", "--into", str(tmp_path / "out")])
     assert result.exit_code != 0
 
 
@@ -110,7 +104,7 @@ def test_add_tool_command_creates_file(tmp_path):
     # Bootstrap minimal fake project.
     project = tmp_path / "demo"
     (project / "src").mkdir(parents=True)
-    (project / "src" / "server.py").write_text("# stub")
+    (project / "src" / "server.py").write_text("# stub", encoding="utf-8")
     result = runner.invoke(app, ["add", "tool", "my_tool", "-p", str(project)])
     assert result.exit_code == 0, result.output
     assert (project / "src" / "tools" / "my_tool.py").exists()

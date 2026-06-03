@@ -1,0 +1,27 @@
+# Render Blueprint — deploys {{ service_name }} MCP.
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: {{ project_name }}
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8001
+      - key: WORKERS
+        value: 2
+      - key: API_BASE_URL
+        sync: false
+      - key: MCP_PUBLIC_URL
+        sync: false
+      - key: OAUTH_ISSUER_URL
+        sync: false
+      - key: AUTH_PROBE_ENABLED
+        value: "true"
+      - key: TELEMETRY_HASH_SALT
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: "https://claude.ai,https://chatgpt.com,https://cursor.sh"

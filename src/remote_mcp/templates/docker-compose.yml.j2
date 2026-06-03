@@ -1,0 +1,21 @@
+services:
+  {{ project_slug }}:
+    build: .
+    image: {{ project_name }}:dev
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8001
+      WORKERS: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,os; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('PORT','8001')+'/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs

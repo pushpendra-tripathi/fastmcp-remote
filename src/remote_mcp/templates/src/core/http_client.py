@@ -102,9 +102,7 @@ async def api_get(
     logger.debug("GET %s params=%s", path, params)
 
     async def _do() -> dict[str, Any]:
-        response = await client.get(
-            path, headers={"Authorization": auth_header}, params=params
-        )
+        response = await client.get(path, headers={"Authorization": auth_header}, params=params)
         _raise_for_status(response)
         content_type = response.headers.get("content-type", "")
         if content_type.startswith("application/json"):

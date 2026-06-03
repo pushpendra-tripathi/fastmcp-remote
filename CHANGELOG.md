@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] — 2026-06-03
+
+### Added
+- One-click deploy templates: `render.yaml`, `fly.toml`, `docker-compose.yml` in scaffolded project.
+- `mcp.json` preset for MCP Inspector (`npx @modelcontextprotocol/inspector --config ./mcp.json`).
+- `SUPPORT_EMAIL` env var wired into landing-page `Get Help` link (hidden when unset).
+- `Releases` and `Documentation` URLs on PyPI sidebar.
+- `pip-audit` security job in CI (runs on every push/PR).
+- `pytest-timeout` and `ruff` added to root `[project.optional-dependencies.dev]`.
+- README + ROADMAP refreshed for v0.2.0 changes; `docs/ROADMAP.md` published.
+
+### Changed
+- Project-name validator now enforces minimum length of 2 chars (regex previously allowed 1).
+
+### Fixed
+- Windows CI: tests read generated files with explicit `encoding="utf-8"` (was failing on cp1252 locale when files contained em-dashes / smart quotes).
+- Repository formatting reflowed via `ruff format`.
+
 ## [0.2.0] — 2026-06-03
 
 ### Added

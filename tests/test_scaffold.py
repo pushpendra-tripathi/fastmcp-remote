@@ -1,4 +1,3 @@
-
 import pytest
 
 from remote_mcp.scaffold import scaffold_project
@@ -9,6 +8,11 @@ CONTEXT = {
     "service_name": "My Project",
     "class_prefix": "MyProject",
 }
+
+
+def _read(path):
+    """Read a generated file as UTF-8 regardless of platform locale."""
+    return path.read_text(encoding="utf-8")
 
 
 def test_scaffold_produces_complete_file_tree(tmp_path):
@@ -49,44 +53,44 @@ def test_scaffold_key_content_substitutions(tmp_path):
     target = tmp_path / "my-project"
     scaffold_project(target, CONTEXT)
 
-    errors_content = (target / "src" / "core" / "errors.py").read_text()
+    errors_content = _read(target / "src" / "core" / "errors.py")
     assert "MyProjectError" in errors_content
     assert "MY_PROJECT_ERROR" in errors_content
     assert "EnineSites" not in errors_content
     assert "{{ class_prefix }}" not in errors_content
 
-    telemetry_content = (target / "src" / "core" / "telemetry.py").read_text()
+    telemetry_content = _read(target / "src" / "core" / "telemetry.py")
     assert "my_project_telemetry" in telemetry_content
     assert "{{ project_slug }}" not in telemetry_content
 
-    server_content = (target / "src" / "server.py").read_text()
+    server_content = _read(target / "src" / "server.py")
     assert "My Project" in server_content
     assert "{{ service_name }}" not in server_content
 
-    app_content = (target / "src" / "app.py").read_text()
+    app_content = _read(target / "src" / "app.py")
     assert "My Project" in app_content
     assert "src.app:app" in app_content
     assert "{{ service_name }}" not in app_content
 
-    auth_content = (target / "src" / "middleware" / "auth.py").read_text()
+    auth_content = _read(target / "src" / "middleware" / "auth.py")
     assert "My Project" in auth_content
     assert "_UNPROTECTED_EXACT" in auth_content
     assert "{{ service_name }}" not in auth_content
 
-    health_content = (target / "src" / "views" / "health.py").read_text()
+    health_content = _read(target / "src" / "views" / "health.py")
     assert "My Project" in health_content
     assert "{{ service_name }}" not in health_content
 
-    assert "src.app import app" in (target / "asgi.py").read_text()
-    assert "src.app import app" in (target / "tests" / "conftest.py").read_text()
+    assert "src.app import app" in _read(target / "asgi.py")
+    assert "src.app import app" in _read(target / "tests" / "conftest.py")
 
-    pyproject_content = (target / "pyproject.toml").read_text()
+    pyproject_content = _read(target / "pyproject.toml")
     assert 'name = "my-project"' in pyproject_content
 
-    settings_content = (target / "src" / "config" / "settings.py").read_text()
+    settings_content = _read(target / "src" / "config" / "settings.py")
     assert "user_agent" in settings_content
 
-    env_example_content = (target / "env.example").read_text()
+    env_example_content = _read(target / "env.example")
     assert "my_project-mcp/1.0" in env_example_content
 
 
@@ -100,20 +104,20 @@ def test_scaffold_custom_service_name_class_prefix(tmp_path):
     target = tmp_path / "my-awesome-tool"
     scaffold_project(target, context)
 
-    errors_content = (target / "src" / "core" / "errors.py").read_text()
+    errors_content = _read(target / "src" / "core" / "errors.py")
     assert "MyAwesomeTool" in errors_content
 
 
 def test_scaffold_non_empty_dir_raises(tmp_path):
     existing = tmp_path / "existing"
     existing.mkdir()
-    (existing / "untouchable.txt").write_text("dont delete me")
+    (existing / "untouchable.txt").write_text("dont delete me", encoding="utf-8")
 
     with pytest.raises(FileExistsError):
         scaffold_project(existing, CONTEXT)
 
     # Pre-existing file must remain untouched
-    assert (existing / "untouchable.txt").read_text() == "dont delete me"
+    assert (existing / "untouchable.txt").read_text(encoding="utf-8") == "dont delete me"
 
 
 def test_scaffold_empty_dir_succeeds(tmp_path):
