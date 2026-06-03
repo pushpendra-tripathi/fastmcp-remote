@@ -1,5 +1,7 @@
 """RequireAuthMiddleware — OAuth Bearer token enforcement."""
 
+from __future__ import annotations
+
 import logging
 
 import httpx
@@ -12,7 +14,19 @@ from src.config.settings import settings
 logger = logging.getLogger(__name__)
 
 # Exact-match paths that bypass auth. Add new public routes here.
-_UNPROTECTED_PATHS = {"/"}
+_UNPROTECTED_EXACT = {"/", "/health"}
+_UNPROTECTED_PREFIXES = ("/.well-known/", "/health/")
+_PUBLIC_ASSETS = ("/favicon.ico", "/apple-touch-icon.png", "/android-chrome-")
+
+
+def _is_unprotected(path: str) -> bool:
+    if path in _UNPROTECTED_EXACT:
+        return True
+    if any(path.startswith(p) for p in _UNPROTECTED_PREFIXES):
+        return True
+    if any(path == a or path.startswith(a) for a in _PUBLIC_ASSETS):
+        return True
+    return False
 
 
 class RequireAuthMiddleware(BaseHTTPMiddleware):
@@ -28,15 +42,7 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        if (
-            path in _UNPROTECTED_PATHS
-            or path.startswith("/health")
-            or ".well-known" in path
-            or any(x in path for x in ["favicon", "apple-touch-icon", "android-chrome"])
-        ):
-            return await call_next(request)
-
-        if request.method == "OPTIONS":
+        if _is_unprotected(path) or request.method == "OPTIONS":
             return await call_next(request)
 
         auth_header = request.headers.get("authorization")
@@ -50,26 +56,36 @@ class RequireAuthMiddleware(BaseHTTPMiddleware):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        if request.method == "GET" and path.rstrip("/") == "/sse" and settings.auth_probe_enabled:
+        if (
+            request.method == "GET"
+            and path.rstrip("/") == "/sse"
+            and settings.auth_probe_enabled
+        ):
             probe_url = f"{settings.api_base_url.rstrip('/')}{settings.auth_probe_path}"
+            pooled = getattr(request.state, "http_client", None)
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    response = await client.get(
-                        probe_url,
-                        headers={"Authorization": auth_header},
+                if pooled is not None:
+                    # Reuse the lifespan-pooled client; override base_url.
+                    response = await pooled.get(
+                        probe_url, headers={"Authorization": auth_header}, timeout=5.0
                     )
-                    if response.status_code == 401:
-                        logger.warning(
-                            "Rejecting invalid/expired token during connection handshake."
+                else:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        response = await client.get(
+                            probe_url, headers={"Authorization": auth_header}
                         )
-                        return JSONResponse(
-                            status_code=401,
-                            content={
-                                "error": "Invalid or expired token. "
-                                "Please authenticate again or refresh."
-                            },
-                            headers={"WWW-Authenticate": "Bearer"},
-                        )
+                if response.status_code == 401:
+                    logger.warning(
+                        "Rejecting invalid/expired token during connection handshake."
+                    )
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "error": "Invalid or expired token. "
+                            "Please authenticate again or refresh."
+                        },
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
             except httpx.RequestError as e:
                 logger.error("Network error validating token during handshake: %s", e)
                 return JSONResponse(

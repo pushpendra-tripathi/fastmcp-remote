@@ -1,5 +1,4 @@
 import pytest
-
 from src.core.auth import extract_bearer_token
 
 

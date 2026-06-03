@@ -1,0 +1,58 @@
+# {{ service_name }} MCP
+
+Remote MCP (Model Context Protocol) server for {{ service_name }}, scaffolded with
+[`remote-mcp`](https://github.com/pushpendra-tripathi/remote-mcp).
+
+## Quick start
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -e ".[dev]"
+cp env.example .env
+uvicorn asgi:application --reload --port 8001 --lifespan on
+```
+
+Server: http://localhost:8001
+MCP endpoint: http://localhost:8001/sse
+OAuth discovery: http://localhost:8001/.well-known/oauth-authorization-server
+
+## Layout
+
+```
+src/
+├── server.py              # FastMCP instance + tool mounts
+├── app.py                 # Starlette factory
+├── config/settings.py     # Pydantic settings (env-driven)
+├── core/                  # auth, errors, http_client, telemetry, handlers
+├── middleware/            # auth + telemetry middleware
+├── views/                 # health, oauth discovery, landing
+└── tools/                 # your tools live here
+```
+
+## Adding a tool
+
+```bash
+remote-mcp add tool my_tool
+```
+
+Then mount in `src/server.py`:
+
+```python
+from src.tools.my_tool import my_tool_router
+mcp.mount(my_tool_router)
+```
+
+## Tests
+
+```bash
+pytest
+```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for environment variables, Docker, and
+Render/Railway/Fly.io notes.
+
+## License
+
+MIT.

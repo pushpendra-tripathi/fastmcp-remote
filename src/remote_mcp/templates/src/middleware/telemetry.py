@@ -1,5 +1,7 @@
 """TelemetryMiddleware — connection-level event recording."""
 
+import contextlib
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -16,10 +18,8 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
 
         auth_header = request.headers.get("authorization")
         if auth_header:
-            try:
+            with contextlib.suppress(Exception):
                 user_id = hash_token(auth_header)
-            except Exception:
-                pass
 
         response = await call_next(request)
 

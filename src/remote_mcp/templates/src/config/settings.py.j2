@@ -1,4 +1,6 @@
-from pathlib import Path
+from __future__ import annotations
+
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,12 +12,16 @@ class Settings(BaseSettings):
 
     # Auth Probe — opt-in, validates token on SSE handshake
     auth_probe_path: str = "/health/"
-    auth_probe_enabled: bool = False  # set to True to validate tokens on SSE handshake
+    auth_probe_enabled: bool = False
 
     # OAuth / MCP discovery
     mcp_public_url: str = "http://localhost:8001/mcp"
     oauth_issuer_url: str = "http://localhost:8001"
-    logo_uri: str = ""   # omitted from OAuth discovery response when empty
+    oauth_authorize_path: str = "/o/authorize/"
+    oauth_token_path: str = "/o/token/"
+    oauth_registration_path: str = "/o/register/"
+    oauth_scopes_supported: str = "read"
+    logo_uri: str = ""  # omitted from OAuth discovery response when empty
 
     # HTTP Client
     http_timeout: float = 90.0
@@ -34,6 +40,10 @@ class Settings(BaseSettings):
     telemetry_log_path: str = "logs/telemetry.jsonl"
     telemetry_max_bytes: int = 52428800  # 50 MB
     telemetry_backup_count: int = 10
+    telemetry_hash_salt: str = ""  # HMAC salt for hash_token (set per-deployment)
+
+    # Support / branding
+    support_email: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -43,4 +53,10 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings()
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+# Back-compat module-level handle; equivalent to get_settings().
+settings = get_settings()

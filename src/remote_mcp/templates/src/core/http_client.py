@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import json
 import logging
-from typing import Any, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import httpx
 from tenacity import (
@@ -56,40 +59,26 @@ def _raise_for_status(response: httpx.Response) -> None:
     raise BackendError(f"Backend returned HTTP {status}", details=body)
 
 
-async def _do_get(
-    client: httpx.AsyncClient,
-    path: str,
-    auth_header: str,
-    params: Optional[dict[str, Any]],
-) -> dict[str, Any]:
-    response = await client.get(
-        path,
-        headers={"Authorization": auth_header},
-        params=params,
-    )
-    _raise_for_status(response)
+def _parse_json_or_status(response: httpx.Response) -> dict[str, Any]:
     content_type = response.headers.get("content-type", "")
     if content_type.startswith("application/json"):
         return response.json()
-    return {
-        "error": "Non-JSON response",
-        "content_type": content_type,
-        "hint": "The endpoint may have returned a file.",
-    }
+    return {"status": "ok", "content_type": content_type}
 
 
-async def api_get(
-    client: httpx.AsyncClient,
-    path: str,
-    auth_header: str,
-    params: Optional[dict[str, Any]] = None,
+async def _request_with_retry(
+    name: str,
+    do_call: Callable[[], Awaitable[dict[str, Any]]],
+    *,
+    retry: bool = True,
 ) -> dict[str, Any]:
-    """Authenticated GET with retry on transient failures (3 attempts, exponential backoff)."""
-    logger.debug("GET %s params=%s", path, params)
+    """Run an HTTP call with shared error handling. Optional retry on transient errors."""
     try:
+        if not retry:
+            return await do_call()
         async for attempt in _retrying():
             with attempt:
-                return await _do_get(client, path, auth_header, params)
+                return await do_call()
     except (AuthError, ForbiddenError, RateLimitError, BackendError):
         raise
     except RetryError as e:
@@ -99,145 +88,101 @@ async def api_get(
     except httpx.RequestError as e:
         raise BackendError(f"Network error contacting backend: {e}") from e
     except Exception as e:
-        raise BackendError(f"Unexpected error during API request: {e}") from e
-    raise BackendError("api_get exited retry loop without result")
+        raise BackendError(f"Unexpected error during {name}: {e}") from e
+    raise BackendError(f"{name} exited retry loop without result")
 
 
-async def _do_post(
+async def api_get(
     client: httpx.AsyncClient,
     path: str,
     auth_header: str,
-    json_body: Optional[dict[str, Any]],
-    form_data: Optional[dict[str, Any]],
+    params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if json_body is not None:
-        response = await client.post(
-            path,
-            headers={"Authorization": auth_header, "Content-Type": "application/json"},
-            json=json_body,
+    """Authenticated GET with retry on transient failures."""
+    logger.debug("GET %s params=%s", path, params)
+
+    async def _do() -> dict[str, Any]:
+        response = await client.get(
+            path, headers={"Authorization": auth_header}, params=params
         )
-    else:
-        response = await client.post(
-            path,
-            headers={"Authorization": auth_header},
-            data=form_data,
-        )
-    _raise_for_status(response)
-    content_type = response.headers.get("content-type", "")
-    if content_type.startswith("application/json"):
-        return response.json()
-    return {"status": "ok", "content_type": content_type}
+        _raise_for_status(response)
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("application/json"):
+            return response.json()
+        return {
+            "error": "Non-JSON response",
+            "content_type": content_type,
+            "hint": "The endpoint may have returned a file.",
+        }
+
+    return await _request_with_retry("api_get", _do)
 
 
 async def api_post(
     client: httpx.AsyncClient,
     path: str,
     auth_header: str,
-    json_body: Optional[dict[str, Any]] = None,
-    form_data: Optional[dict[str, Any]] = None,
+    json_body: dict[str, Any] | None = None,
+    form_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Authenticated POST with retry on transient failures."""
     if json_body is None and form_data is None:
         raise ValueError("api_post requires either json_body or form_data")
     logger.debug("POST %s", path)
-    try:
-        async for attempt in _retrying():
-            with attempt:
-                return await _do_post(client, path, auth_header, json_body, form_data)
-    except (AuthError, ForbiddenError, RateLimitError, BackendError):
-        raise
-    except RetryError as e:
-        raise BackendError("Backend unreachable after retries", details=str(e)) from e
-    except httpx.RequestError as e:
-        raise BackendError(f"Network error contacting backend: {e}") from e
-    except Exception as e:
-        raise BackendError(f"Unexpected error during API request: {e}") from e
-    raise BackendError("api_post exited retry loop without result")
-
-
-async def api_patch(
-    client: httpx.AsyncClient,
-    path: str,
-    auth_header: str,
-    json_body: dict[str, Any],
-) -> dict[str, Any]:
-    """Authenticated PATCH with retry on transient failures."""
-    logger.debug("PATCH %s", path)
 
     async def _do() -> dict[str, Any]:
-        response = await client.patch(
-            path,
-            headers={"Authorization": auth_header, "Content-Type": "application/json"},
-            json=json_body,
-        )
+        if json_body is not None:
+            response = await client.post(
+                path,
+                headers={"Authorization": auth_header, "Content-Type": "application/json"},
+                json=json_body,
+            )
+        else:
+            response = await client.post(
+                path, headers={"Authorization": auth_header}, data=form_data
+            )
         _raise_for_status(response)
-        content_type = response.headers.get("content-type", "")
-        if content_type.startswith("application/json"):
-            return response.json()
-        return {"status": "ok"}
+        return _parse_json_or_status(response)
 
-    try:
-        async for attempt in _retrying():
-            with attempt:
-                return await _do()
-    except (AuthError, ForbiddenError, RateLimitError, BackendError):
-        raise
-    except RetryError as e:
-        raise BackendError("Backend unreachable after retries", details=str(e)) from e
-    except httpx.RequestError as e:
-        raise BackendError(f"Network error contacting backend: {e}") from e
-    except Exception as e:
-        raise BackendError(f"Unexpected error: {e}") from e
-    raise BackendError("api_patch exited retry loop without result")
+    return await _request_with_retry("api_post", _do)
 
 
-async def api_put(
-    client: httpx.AsyncClient,
-    path: str,
-    auth_header: str,
-    json_body: dict[str, Any],
-) -> dict[str, Any]:
-    """Authenticated PUT with retry on transient failures."""
-    logger.debug("PUT %s", path)
+def _make_json_body_call(method: str) -> Callable[..., Awaitable[dict[str, Any]]]:
+    async def call(
+        client: httpx.AsyncClient,
+        path: str,
+        auth_header: str,
+        json_body: dict[str, Any],
+    ) -> dict[str, Any]:
+        logger.debug("%s %s", method, path)
 
-    async def _do() -> dict[str, Any]:
-        response = await client.put(
-            path,
-            headers={"Authorization": auth_header, "Content-Type": "application/json"},
-            json=json_body,
-        )
-        _raise_for_status(response)
-        content_type = response.headers.get("content-type", "")
-        if content_type.startswith("application/json"):
-            return response.json()
-        return {"status": "ok"}
+        async def _do() -> dict[str, Any]:
+            response = await client.request(
+                method,
+                path,
+                headers={"Authorization": auth_header, "Content-Type": "application/json"},
+                json=json_body,
+            )
+            _raise_for_status(response)
+            return _parse_json_or_status(response)
 
-    try:
-        async for attempt in _retrying():
-            with attempt:
-                return await _do()
-    except (AuthError, ForbiddenError, RateLimitError, BackendError):
-        raise
-    except RetryError as e:
-        raise BackendError("Backend unreachable after retries", details=str(e)) from e
-    except httpx.RequestError as e:
-        raise BackendError(f"Network error contacting backend: {e}") from e
-    except Exception as e:
-        raise BackendError(f"Unexpected error: {e}") from e
-    raise BackendError("api_put exited retry loop without result")
+        return await _request_with_retry(f"api_{method.lower()}", _do)
+
+    call.__name__ = f"api_{method.lower()}"
+    return call
+
+
+api_patch = _make_json_body_call("PATCH")
+api_put = _make_json_body_call("PUT")
 
 
 async def api_delete(
     client: httpx.AsyncClient,
     path: str,
     auth_header: str,
-    json_body: Optional[dict[str, Any]] = None,
+    json_body: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Authenticated DELETE with optional JSON body and retry on transient failures.
-
-    Uses client.request("DELETE", ...) rather than client.delete() because
-    httpx rejects json= on the shorthand delete() method.
-    """
+    """Authenticated DELETE with optional JSON body and retry on transient failures."""
     logger.debug("DELETE %s", path)
 
     async def _do() -> dict[str, Any]:
@@ -250,24 +195,9 @@ async def api_delete(
         if response.status_code == 204:
             return {"status": "deleted"}
         _raise_for_status(response)
-        content_type = response.headers.get("content-type", "")
-        if content_type.startswith("application/json"):
-            return response.json()
-        return {"status": "ok"}
+        return _parse_json_or_status(response)
 
-    try:
-        async for attempt in _retrying():
-            with attempt:
-                return await _do()
-    except (AuthError, ForbiddenError, RateLimitError, BackendError):
-        raise
-    except RetryError as e:
-        raise BackendError("Backend unreachable after retries", details=str(e)) from e
-    except httpx.RequestError as e:
-        raise BackendError(f"Network error contacting backend: {e}") from e
-    except Exception as e:
-        raise BackendError(f"Unexpected error: {e}") from e
-    raise BackendError("api_delete exited retry loop without result")
+    return await _request_with_retry("api_delete", _do)
 
 
 async def api_upload(
@@ -280,7 +210,8 @@ async def api_upload(
 ) -> dict[str, Any]:
     """Authenticated multipart file upload. No retry — not idempotent."""
     logger.debug("UPLOAD %s filename=%s size=%d", path, filename, len(file_bytes))
-    try:
+
+    async def _do() -> dict[str, Any]:
         response = await client.post(
             path,
             headers={"Authorization": auth_header},
@@ -296,9 +227,5 @@ async def api_upload(
                 return data[0]
             return data
         return {"status": "ok", "content_type": ct}
-    except (AuthError, ForbiddenError, RateLimitError, BackendError):
-        raise
-    except httpx.RequestError as e:
-        raise BackendError(f"Network error during upload: {e}") from e
-    except Exception as e:
-        raise BackendError(f"Unexpected error during upload: {e}") from e
+
+    return await _request_with_retry("api_upload", _do, retry=False)

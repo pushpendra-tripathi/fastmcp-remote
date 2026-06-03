@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from src.core.telemetry import TelemetryEvent, hash_token, telemetry_service
 
 
