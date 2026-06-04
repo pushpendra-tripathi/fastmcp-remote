@@ -53,9 +53,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install package + pip-audit
-        run: |
-          pip install -e .
-          pip install pip-audit
-      - name: Audit installed dependencies for known CVEs
-        run: pip-audit --strict
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit declared dependencies for known CVEs
+        run: pip-audit . --strict
