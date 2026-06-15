@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-06-15
+
+### Added
+- `AUTH_MODE` setting in generated projects: `none` (local dev, no auth), `passthrough` (default, current behavior), `jwt` (local verification against `OAUTH_JWKS_URL`; new `verify_jwt()` in `core/auth.py`, `pyjwt[crypto]` dependency).
+- `--auth-mode`, `--github-owner`, `--legacy-sse` flags on `remote-mcp new`.
+- Registry readiness: generated `server.json` (2025-12-11 schema) and `.github/workflows/publish-mcp.yml` publishing to registry.modelcontextprotocol.io on version tags.
+- Origin validation per MCP spec 2025-11-25: disallowed `Origin` headers get 403.
+- 401 responses now carry `WWW-Authenticate: Bearer resource_metadata="…"` (RFC 9728) so clients can discover the authorization server.
+- Example echo tool is mounted by default — fresh scaffolds expose a working tool on first boot.
+- Startup warning when `ALLOWED_ORIGINS` is unset (all origins accepted; warning makes the permissive posture visible in logs).
+
+### Changed
+- **MCP endpoint moved from `/sse` to `/mcp`** (Streamable HTTP, per spec). `--legacy-sse` opts into a deprecated SSE transport alias at `/sse`.
+- MCP Inspector preset (`mcp.json`) now declares `streamable-http`.
+- CORS configuration exposes `mcp-session-id` and allows `mcp-protocol-version` headers (required by browser-based clients).
+- `.github/` directory now supported in scaffold output (segment-level dot renames).
+
+### Fixed
+- JWKS and backend-probe error responses no longer echo the raw exception string to HTTP clients; detail is logged server-side only.
+- `verify_jwt` type hints corrected: `signing_key: bytes | None`, return `dict[str, Any]`.
+- JWT and JWKS imports hoisted to module top in auth middleware template (were inside dispatch body, triggering linter warnings).
+
 ## [0.2.1] — 2026-06-03
 
 ### Added

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "remote-mcp"
-version = "0.2.1"
+version = "0.3.0"
 description = "Scaffold a production-ready remote MCP (Model Context Protocol) server with OAuth, RFC 8414/9728 discovery, retry, telemetry, and tests — in one command. Zero runtime dependency on this package."
 readme = "README.md"
 requires-python = ">=3.10"

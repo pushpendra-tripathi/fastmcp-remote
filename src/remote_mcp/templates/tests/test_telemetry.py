@@ -32,7 +32,7 @@ def test_hash_token_does_not_contain_raw_token():
 
 
 def test_event_json_excludes_none_fields():
-    e = TelemetryEvent(event_type="connection", user_id="abc", path="/sse")
+    e = TelemetryEvent(event_type="connection", user_id="abc", path="/mcp")
     payload = e.model_dump_json(exclude_none=True)
     parsed = json.loads(payload)
     assert parsed["event_type"] == "connection"

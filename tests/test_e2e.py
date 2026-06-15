@@ -20,6 +20,9 @@ CONTEXT = {
     "project_slug": "demo_mcp",
     "service_name": "Demo MCP",
     "class_prefix": "DemoMcp",
+    "auth_mode": "passthrough",
+    "github_owner": "YOUR-GITHUB-USERNAME",
+    "legacy_sse": False,
 }
 
 
@@ -88,6 +91,128 @@ def test_scaffold_tool_rejects_duplicate(tmp_path):
         scaffold_tool(target, "search")
 
 
+def test_legacy_sse_scaffold_compiles(tmp_path):
+    ctx = dict(CONTEXT, legacy_sse=True)
+    target = tmp_path / "legacy-mcp"
+    scaffold_project(target, ctx)
+    total, failed = _python_files_compile(target)
+    assert total > 0
+    assert failed == [], f"Files failed to compile: {failed}"
+
+
+def test_auth_mode_none_scaffold_compiles(tmp_path):
+    ctx = dict(CONTEXT, auth_mode="none")
+    target = tmp_path / "none-mcp"
+    scaffold_project(target, ctx)
+    total, failed = _python_files_compile(target)
+    assert total > 0
+    assert failed == [], f"Files failed to compile: {failed}"
+
+
+def _install_venv(target: Path) -> Path:
+    """Create venv + install project. Returns python executable path."""
+    venv = target / ".venv"
+    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, timeout=120)
+    pip = venv / ("Scripts" if os.name == "nt" else "bin") / "pip"
+    subprocess.run([str(pip), "install", "-e", ".[dev]"], cwd=target, check=True, timeout=600)
+    return venv / ("Scripts" if os.name == "nt" else "bin") / "python"
+
+
+def _wait_for_health(base_url: str, timeout_s: float = 30.0) -> None:
+    import time
+    import urllib.request
+
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"{base_url}/health", timeout=2) as r:
+                if r.status == 200:
+                    return
+        except Exception:
+            time.sleep(0.5)
+    raise TimeoutError(f"Server at {base_url} did not become healthy")
+
+
+@pytest.mark.slow
+def test_booted_server_spec_compliance(tmp_path):
+    """Boot the generated server twice (passthrough, none) and assert spec behavior."""
+    import json
+    import socket
+    import urllib.error
+    import urllib.request
+
+    target = tmp_path / "demo-mcp"
+    scaffold_project(target, CONTEXT)
+    py = _install_venv(target)
+    with socket.socket() as _s:
+        _s.bind(("127.0.0.1", 0))
+        port = _s.getsockname()[1]
+    base = f"http://127.0.0.1:{port}"
+
+    def boot(env_extra):
+        env = dict(os.environ, PORT=str(port), HOST="127.0.0.1", **env_extra)
+        return subprocess.Popen(
+            [str(py), "-m", "uvicorn", "asgi:application", "--port", str(port), "--lifespan", "on"],
+            cwd=target,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+
+    # passthrough: 401 with resource_metadata
+    proc = boot({"AUTH_MODE": "passthrough"})
+    try:
+        _wait_for_health(base)
+        try:
+            urllib.request.urlopen(f"{base}/mcp", timeout=5)
+            raise AssertionError("expected 401")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+            www = e.headers.get("WWW-Authenticate", "")
+            assert 'resource_metadata="' in www, www
+        # Origin rejection
+        req = urllib.request.Request(f"{base}/mcp", headers={"Origin": "https://evil.example.com"})
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            raise AssertionError("expected 403")
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+    # none: MCP initialize succeeds without auth
+    proc = boot({"AUTH_MODE": "none"})
+    try:
+        _wait_for_health(base)
+        body = json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "e2e", "version": "0.0.1"},
+                },
+            }
+        ).encode()
+        req = urllib.request.Request(
+            f"{base}/mcp",
+            data=body,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            assert r.status == 200
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+
+
 @pytest.mark.slow
 def test_scaffolded_project_pytest_passes(tmp_path):
     """Full e2e: scaffold + pip install + run the generated test suite.
@@ -98,16 +223,7 @@ def test_scaffolded_project_pytest_passes(tmp_path):
     target = tmp_path / "demo-mcp"
     scaffold_project(target, CONTEXT)
 
-    venv = target / ".venv"
-    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True, timeout=120)
-    pip = venv / ("Scripts" if os.name == "nt" else "bin") / "pip"
-    py = venv / ("Scripts" if os.name == "nt" else "bin") / "python"
-    subprocess.run(
-        [str(pip), "install", "-e", ".[dev]"],
-        cwd=target,
-        check=True,
-        timeout=600,
-    )
+    py = _install_venv(target)
     result = subprocess.run(
         [str(py), "-m", "pytest", "tests/", "-q"],
         cwd=target,

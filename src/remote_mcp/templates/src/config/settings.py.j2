@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +10,12 @@ class Settings(BaseSettings):
     # Backend
     api_base_url: str = "https://api.example.com"
     user_agent: str = "{{ project_slug }}-mcp/1.0"
+
+    # Auth mode: "none" (dev only — no auth), "passthrough" (require Bearer,
+    # forward verbatim), "jwt" (verify locally against OAUTH_JWKS_URL).
+    auth_mode: str = "{{ auth_mode }}"
+    oauth_jwks_url: str = ""
+    jwt_audience: str = ""  # defaults to MCP_PUBLIC_URL when empty
 
     # Auth Probe — opt-in, validates token on SSE handshake
     auth_probe_path: str = "/health/"
@@ -44,6 +51,15 @@ class Settings(BaseSettings):
 
     # Support / branding
     support_email: str = ""
+
+    @model_validator(mode="after")
+    def _check_auth_mode(self):
+        valid = {"none", "passthrough", "jwt"}
+        if self.auth_mode not in valid:
+            raise ValueError(f"AUTH_MODE must be one of {sorted(valid)}, got {self.auth_mode!r}")
+        if self.auth_mode == "jwt" and not self.oauth_jwks_url:
+            raise ValueError("AUTH_MODE=jwt requires OAUTH_JWKS_URL to be set")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

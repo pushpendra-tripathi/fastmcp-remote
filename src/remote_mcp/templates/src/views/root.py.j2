@@ -15,7 +15,9 @@ async def root_ui(request: Request):
         context={
             "year": datetime.now().year,
             "mcp_public_url": settings.mcp_public_url.removesuffix("/mcp")
+{%- if legacy_sse %}
             .removesuffix("/sse")
+{%- endif %}
             .rstrip("/"),
             "logo_uri": settings.logo_uri,
             "support_email": settings.support_email,

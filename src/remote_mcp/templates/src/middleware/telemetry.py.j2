@@ -7,7 +7,7 @@ from starlette.requests import Request
 
 
 class TelemetryMiddleware(BaseHTTPMiddleware):
-    """Record auth failures, rate limits, and SSE connection events."""
+    """Record auth failures, rate limits, and MCP connection events."""
 
     async def dispatch(self, request: Request, call_next):
         from src.core.telemetry import TelemetryEvent, hash_token, telemetry_service
@@ -28,7 +28,7 @@ class TelemetryMiddleware(BaseHTTPMiddleware):
             event_type = "auth_failure"
         elif response.status_code == 429:
             event_type = "rate_limit"
-        elif method == "GET" and path.rstrip("/") == "/sse":
+        elif method == "GET" and path.rstrip("/") in ("/mcp"{% if legacy_sse %}, "/sse"{% endif %},):
             event_type = "connection"
 
         if event_type:

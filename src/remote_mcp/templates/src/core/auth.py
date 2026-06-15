@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+
+import jwt as pyjwt
+from jwt import PyJWKClient
 
 from fastmcp import Context
 
@@ -36,3 +40,42 @@ def extract_bearer_token(ctx: Context) -> str:
             return f"Bearer {token}"
 
     raise ValueError("Missing Authorization header. The LLM client must authenticate via OAuth.")
+
+
+_jwks_client = None
+
+
+def _get_jwks_client() -> PyJWKClient:
+    """Lazily construct a cached PyJWKClient from settings."""
+    global _jwks_client
+    if _jwks_client is None:
+        from src.config.settings import settings
+
+        _jwks_client = PyJWKClient(settings.oauth_jwks_url)
+    return _jwks_client
+
+
+def verify_jwt(token: str, signing_key: bytes | None = None) -> dict[str, Any]:
+    """
+    Verify a JWT locally (AUTH_MODE=jwt).
+
+    Checks signature (JWKS), iss, aud, exp. Returns decoded claims.
+    ``signing_key`` overrides JWKS lookup (tests).
+
+    Raises:
+        jwt.PyJWTError: on any validation failure.
+    """
+    from src.config.settings import settings
+
+    if signing_key is None:
+        signing_key = _get_jwks_client().get_signing_key_from_jwt(token).key
+
+    audience = settings.jwt_audience or settings.mcp_public_url
+    return pyjwt.decode(
+        token,
+        signing_key,
+        algorithms=["RS256", "ES256"],
+        audience=audience,
+        issuer=settings.oauth_issuer_url.rstrip("/"),
+        options={"require": ["exp", "iss", "aud"]},
+    )

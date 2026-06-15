@@ -24,7 +24,7 @@ uvicorn asgi:application --reload --port 8001 --lifespan on
 ```
 
 Server: http://localhost:8001
-MCP endpoint: http://localhost:8001/sse
+MCP endpoint: http://localhost:8001/mcp
 OAuth discovery: http://localhost:8001/.well-known/oauth-authorization-server
 
 ## Layout
@@ -67,3 +67,15 @@ Render/Railway/Fly.io notes.
 ## License
 
 MIT.
+
+## Publish to the MCP Registry
+
+This project ships registry-ready metadata:
+
+1. Edit `server.json`: replace `YOUR-DOMAIN` with your deployed domain{% if github_owner == "YOUR-GITHUB-USERNAME" %} and `YOUR-GITHUB-USERNAME` with your GitHub user/org{% endif %}.
+2. Make sure the server is publicly reachable at the `remotes[].url`.
+3. Push a version tag: `git tag v1.0.0 && git push --tags`.
+
+`.github/workflows/publish-mcp.yml` authenticates via GitHub OIDC and publishes
+to the official registry (registry.modelcontextprotocol.io), which feeds the
+marketplaces MCP clients use for discovery.

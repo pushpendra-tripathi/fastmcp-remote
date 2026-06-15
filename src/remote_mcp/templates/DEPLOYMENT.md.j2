@@ -10,15 +10,18 @@ pip install -e ".[dev]"
 uvicorn asgi:application --reload --host 127.0.0.1 --port 8001 --lifespan on
 ```
 
-Server starts at http://localhost:8001. MCP endpoint: http://localhost:8001/sse.
+Server starts at http://localhost:8001. MCP endpoint: http://localhost:8001/mcp.
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `API_BASE_URL` | `https://api.example.com` | Upstream API URL |
+| `AUTH_MODE` | `passthrough` | none \| passthrough \| jwt — auth enforcement mode |
+| `OAUTH_JWKS_URL` | `` | JWKS endpoint, required when AUTH_MODE=jwt |
+| `JWT_AUDIENCE` | `` | JWT aud claim to enforce; defaults to MCP_PUBLIC_URL |
 | `AUTH_PROBE_PATH` | `/health/` | Endpoint to validate Bearer tokens |
-| `AUTH_PROBE_ENABLED` | `false` | Enable token probe on SSE handshake |
+| `AUTH_PROBE_ENABLED` | `false` | Enable token probe on MCP connect |
 | `MCP_PUBLIC_URL` | `http://localhost:8001/mcp` | Public MCP URL (shown in landing page) |
 | `OAUTH_ISSUER_URL` | `http://localhost:8001` | OAuth issuer for RFC 8414 discovery |
 | `OAUTH_AUTHORIZE_PATH` | `/o/authorize/` | OAuth authorize endpoint (relative or full URL) |
@@ -77,7 +80,7 @@ Set a Bearer token in the Inspector UI to exercise authenticated tools.
 ## Connecting to Claude
 
 **Claude.ai (Web):** Settings → Connectors → Add → Custom → Web
-- Remote MCP Server URL: `https://your-mcp-server.example.com/mcp/sse`
+- Remote MCP Server URL: `https://your-mcp-server.example.com/mcp`
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
@@ -85,7 +88,7 @@ Set a Bearer token in the Inspector UI to exercise authenticated tools.
   "mcpServers": {
     "{{ project_name }}": {
       "command": "npx",
-      "args": ["-y", "mcp-remote@latest", "https://your-mcp-server.example.com/mcp/sse"]
+      "args": ["-y", "mcp-remote@latest", "https://your-mcp-server.example.com/mcp"]
     }
   }
 }
@@ -93,5 +96,5 @@ Set a Bearer token in the Inspector UI to exercise authenticated tools.
 
 **Claude Code (CLI):**
 ```bash
-claude mcp add {{ project_name }} --transport http https://your-mcp-server.example.com/mcp/sse
+claude mcp add {{ project_name }} --transport http https://your-mcp-server.example.com/mcp
 ```

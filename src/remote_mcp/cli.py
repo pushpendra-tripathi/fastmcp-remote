@@ -31,6 +31,7 @@ app.add_typer(add_app, name="add")
 # does not end with hyphen. Length 2-64 (length enforced separately in validator).
 _KEBAB_RE = re.compile(r"^[a-z](?:[a-z0-9]*(?:-[a-z0-9]+)*)$")
 _SNAKE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+_AUTH_MODES = ("none", "passthrough", "jwt")
 
 
 def _validate_project_name(name: str) -> str:
@@ -89,7 +90,13 @@ def main(
     pass
 
 
-def _derive_context(project_name: str, service_name: str) -> dict[str, str]:
+def derive_context(
+    project_name: str,
+    service_name: str,
+    auth_mode: str = "passthrough",
+    github_owner: str = "",
+    legacy_sse: bool = False,
+) -> dict[str, str | bool]:
     project_slug = project_name.replace("-", "_")
     class_prefix = "".join(w.capitalize() for w in project_name.split("-"))
     return {
@@ -97,6 +104,9 @@ def _derive_context(project_name: str, service_name: str) -> dict[str, str]:
         "project_slug": project_slug,
         "service_name": service_name,
         "class_prefix": class_prefix,
+        "auth_mode": auth_mode,
+        "github_owner": github_owner.strip() or "YOUR-GITHUB-USERNAME",
+        "legacy_sse": legacy_sse,
     }
 
 
@@ -119,6 +129,21 @@ def new(
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Skip interactive prompts; use defaults / provided flags."
     ),
+    auth_mode: str = typer.Option(
+        "passthrough",
+        "--auth-mode",
+        help="Default auth mode written to the project: none | passthrough | jwt.",
+    ),
+    github_owner: str = typer.Option(
+        "",
+        "--github-owner",
+        help="GitHub user/org for the MCP registry namespace (io.github.<owner>).",
+    ),
+    legacy_sse: bool = typer.Option(
+        False,
+        "--legacy-sse",
+        help="Also serve the deprecated SSE transport at /sse (compat only).",
+    ),
 ) -> None:
     """Scaffold a new FastMCP remote server."""
     console.print("\n[bold blue]FastMCP Remote Server Generator[/bold blue]\n")
@@ -132,9 +157,26 @@ def new(
         service_name = default_sn if yes else typer.prompt("Service name", default=default_sn)
     service_name = service_name.strip() or _default_service_name(project_name)
 
+    if not yes:
+        auth_mode = typer.prompt("Auth mode (none/passthrough/jwt)", default=auth_mode)
+        github_owner = typer.prompt(
+            "GitHub owner for MCP registry (blank to skip)", default=github_owner
+        )
+    auth_mode = auth_mode.strip().lower()
+    if auth_mode not in _AUTH_MODES:
+        raise typer.BadParameter(
+            f"Invalid auth mode: {auth_mode!r}. Choose from: {', '.join(_AUTH_MODES)}."
+        )
+
     target_dir = into if into is not None else Path(project_name)
 
-    context = _derive_context(project_name, service_name)
+    context = derive_context(
+        project_name,
+        service_name,
+        auth_mode=auth_mode,
+        github_owner=github_owner,
+        legacy_sse=legacy_sse,
+    )
 
     console.print(f"\nScaffolding [cyan]{project_name}[/cyan] into [cyan]{target_dir}[/cyan]...")
 
@@ -151,7 +193,8 @@ def new(
         f"  [cyan]python -m venv venv && source venv/bin/activate[/cyan]\n"
         f'  [cyan]pip install -e ".\\[dev]"[/cyan]\n'
         f"  [cyan]cp env.example .env[/cyan]\n"
-        f"  [cyan]uvicorn asgi:application --reload --port 8001 --lifespan on[/cyan]"
+        f"  [cyan]uvicorn asgi:application --reload --port 8001 --lifespan on[/cyan]\n"
+        f"  [dim]No OAuth backend yet? Set AUTH_MODE=none in .env for local dev.[/dim]"
     )
     console.print(Panel(next_steps, title="[bold]Done! Next steps[/bold]", border_style="green"))
 

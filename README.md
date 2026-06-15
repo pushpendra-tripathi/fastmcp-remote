@@ -5,7 +5,7 @@ One command to a production-ready remote MCP server.
 [![PyPI](https://img.shields.io/pypi/v/remote-mcp)](https://pypi.org/project/remote-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/remote-mcp)](https://pypi.org/project/remote-mcp/)
 [![CI](https://github.com/pushpendra-tripathi/remote-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/pushpendra-tripathi/remote-mcp/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/pushpendra-tripathi/remote-mcp/blob/main/LICENSE)
 
 ---
 
@@ -49,7 +49,7 @@ remote-mcp new my-project --yes --service-name "My Project" --into ./apps/my-pro
     uvicorn asgi:application --reload --port 8001 --lifespan on
 ```
 
-Server is live at `http://localhost:8001`. MCP endpoint: `http://localhost:8001/sse`.
+Server is live at `http://localhost:8001`. MCP endpoint: `http://localhost:8001/mcp`.
 
 Also works as a module:
 
@@ -72,6 +72,9 @@ python -m remote_mcp new my-project
 | `--yes / -y` | Skip prompts; use defaults / provided flags |
 | `--service-name / -s "Foo Bar"` | Human-readable service name |
 | `--into PATH` | Target directory (default `./<name>`) |
+| `--auth-mode none\|passthrough\|jwt` | Default auth mode for the generated project (default: passthrough) |
+| `--github-owner OWNER` | GitHub user/org for the MCP registry namespace in server.json |
+| `--legacy-sse` | Also serve the deprecated SSE transport at /sse |
 
 `add tool` flags:
 
@@ -101,7 +104,7 @@ my-project/
 │   │   ├── health.py          # GET /health
 │   │   ├── oauth.py           # RFC 8414 + RFC 9728 discovery endpoints
 │   │   └── root.py            # landing page at /
-│   └── tools/example.py       # echo tool — your first tool, ready to replace
+│   └── tools/example.py       # echo tool — mounted and live at first boot
 ├── tests/
 │   ├── test_auth.py           # extract_bearer_token edge cases
 │   ├── test_middleware.py     # auth bypass, 401 on missing token
@@ -112,6 +115,10 @@ my-project/
 ├── render.yaml                # Render Blueprint — one-click deploy
 ├── fly.toml                   # Fly.io app config
 ├── mcp.json                   # MCP Inspector preset
+├── server.json                # MCP Registry metadata
+├── .github/
+│   └── workflows/
+│       └── publish-mcp.yml    # registry publish on version tags
 ├── .dockerignore
 ├── .gitignore
 ├── asgi.py                    # production ASGI entrypoint
@@ -130,8 +137,8 @@ my-project/
 | `core/errors.py` | `MyProjectError` + Auth, Forbidden, Validation, Backend, RateLimit subclasses |
 | `core/telemetry.py` | Rotating JSONL log, user IDs hashed via HMAC-SHA256 (`TELEMETRY_HASH_SALT`) |
 | `core/handlers.py` | `@tool_handler` — catches errors, formats responses, records telemetry |
-| `middleware/auth.py` | CORS → Auth → optional backend token probe on SSE connect (reuses pooled client) |
-| `middleware/telemetry.py` | Connection-level events (auth failures, rate limits, SSE connects) |
+| `middleware/auth.py` | CORS → Auth → optional backend token probe on MCP connect (reuses pooled client) |
+| `middleware/telemetry.py` | Connection-level events (auth failures, rate limits, MCP connects) |
 | `views/` | Health, OAuth discovery (RFC 8414 + 9728), landing page — each in its own file |
 | `Dockerfile` | Multi-stage build, non-root `app` user, healthcheck, `WORKERS` env |
 
@@ -172,7 +179,7 @@ async def my_tool(param: str, ctx: Context) -> str:
 ## Connecting to Claude
 
 **Claude.ai (web):** Settings → Connectors → Add → Custom → Web
-- URL: `https://your-server.example.com/mcp/sse`
+- URL: `https://your-server.example.com/mcp`
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
@@ -180,7 +187,7 @@ async def my_tool(param: str, ctx: Context) -> str:
   "mcpServers": {
     "my-project": {
       "command": "npx",
-      "args": ["-y", "mcp-remote@latest", "https://your-server.example.com/mcp/sse"]
+      "args": ["-y", "mcp-remote@latest", "https://your-server.example.com/mcp"]
     }
   }
 }
@@ -188,7 +195,7 @@ async def my_tool(param: str, ctx: Context) -> str:
 
 **Claude Code:**
 ```bash
-claude mcp add my-project --transport http https://your-server.example.com/mcp/sse
+claude mcp add my-project --transport http https://your-server.example.com/mcp
 ```
 
 ## Local debugging with MCP Inspector
@@ -199,7 +206,7 @@ The scaffold ships an `mcp.json` preset:
 npx @modelcontextprotocol/inspector --config ./mcp.json
 ```
 
-Set a Bearer token in the Inspector UI to exercise authenticated tools without standing up a full OAuth flow.
+Set a Bearer token in the Inspector UI to exercise authenticated tools without standing up a full OAuth flow. For zero-config local dev (no token needed), run with `AUTH_MODE=none`.
 
 ## Deployment
 
@@ -222,6 +229,16 @@ The generated project ships pre-filled config:
 
 `DEPLOYMENT.md` in the generated project covers env vars, workers, healthcheck, and hardening notes.
 
+## Publish to the MCP Registry
+
+Every scaffolded project ships `server.json` (MCP Registry metadata) and `.github/workflows/publish-mcp.yml` (OIDC-authenticated publish workflow). To list your server on the official registry:
+
+1. Edit `server.json`: replace `YOUR-DOMAIN` with your deployed domain and set `github_owner` to your GitHub user/org.
+2. Ensure the server is publicly reachable at the URL in `remotes[].url`.
+3. Push a version tag: `git tag v1.0.0 && git push --tags`.
+
+The workflow authenticates via GitHub OIDC (no stored secrets) and publishes to `registry.modelcontextprotocol.io`, which feeds the discovery catalogues that MCP clients use.
+
 ## Configuration
 
 Copy `env.example` to `.env` and edit. Key variables:
@@ -229,16 +246,19 @@ Copy `env.example` to `.env` and edit. Key variables:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `API_BASE_URL` | `https://api.example.com` | Your upstream API |
+| `AUTH_MODE` | `passthrough` | none \| passthrough \| jwt — auth enforcement mode |
+| `OAUTH_JWKS_URL` | `` | JWKS URL, required when AUTH_MODE=jwt |
+| `JWT_AUDIENCE` | `` | JWT audience; defaults to MCP_PUBLIC_URL |
 | `MCP_PUBLIC_URL` | `http://localhost:8001/mcp` | Public MCP URL (shown in landing page) |
 | `OAUTH_ISSUER_URL` | `http://localhost:8001` | OAuth issuer for RFC 8414 discovery |
 | `OAUTH_AUTHORIZE_PATH` | `/o/authorize/` | OAuth authorize endpoint (relative or full URL) |
 | `OAUTH_TOKEN_PATH` | `/o/token/` | OAuth token endpoint |
 | `OAUTH_REGISTRATION_PATH` | `/o/register/` | Dynamic client registration endpoint |
 | `OAUTH_SCOPES_SUPPORTED` | `read` | Comma-separated scope list |
-| `AUTH_PROBE_ENABLED` | `false` | Validate token against backend on SSE connect |
+| `AUTH_PROBE_ENABLED` | `false` | Validate token against backend on MCP connect |
 | `AUTH_PROBE_PATH` | `/health/` | Endpoint used for token probe |
 | `LOGO_URI` | `` | Logo shown in OAuth discovery (optional) |
-| `ALLOWED_ORIGINS` | `https://claude.ai,...` | CORS origins |
+| `ALLOWED_ORIGINS` | `https://claude.ai,...` | CORS origins; unset = all origins accepted (startup warning emitted) |
 | `TELEMETRY_ENABLED` | `true` | Enable JSONL telemetry |
 | `TELEMETRY_HASH_SALT` | `` | HMAC salt for user-id hashing (set per-deployment) |
 | `SUPPORT_EMAIL` | `` | Shown as `Get Help` mailto link on the landing page; hidden when unset |
@@ -256,12 +276,12 @@ Full variable list and deploy instructions in `DEPLOYMENT.md`.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](https://github.com/pushpendra-tripathi/remote-mcp/blob/main/CONTRIBUTING.md). Security reports: [SECURITY.md](https://github.com/pushpendra-tripathi/remote-mcp/blob/main/SECURITY.md).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md).
+See [CHANGELOG.md](https://github.com/pushpendra-tripathi/remote-mcp/blob/main/CHANGELOG.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/pushpendra-tripathi/remote-mcp/blob/main/LICENSE).

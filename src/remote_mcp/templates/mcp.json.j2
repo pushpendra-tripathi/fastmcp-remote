@@ -1,10 +1,10 @@
 {
   "name": "{{ project_name }}",
   "description": "{{ service_name }} MCP server",
-  "transport": "sse",
-  "url": "http://localhost:8001/sse",
+  "transport": "streamable-http",
+  "url": "http://localhost:8001/mcp",
   "auth": {
     "type": "bearer",
-    "instructions": "Set MCP_BEARER_TOKEN in the Inspector to a valid OAuth access token."
+    "instructions": "Set MCP_BEARER_TOKEN in the Inspector to a valid OAuth access token, or run the server with AUTH_MODE=none."
   }
 }

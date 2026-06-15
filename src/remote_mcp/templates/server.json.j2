@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.{{ github_owner }}/{{ project_name }}",
+  "title": "{{ service_name }}",
+  "description": "{{ service_name }} MCP server",
+  "version": "0.1.0",
+  "websiteUrl": "https://YOUR-DOMAIN",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://YOUR-DOMAIN/mcp"
+    }{% if legacy_sse %},
+    {
+      "type": "sse",
+      "url": "https://YOUR-DOMAIN/sse"
+    }{% endif %}
+  ]
+}

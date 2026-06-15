@@ -7,6 +7,9 @@ CONTEXT = {
     "project_slug": "my_project",
     "service_name": "My Project",
     "class_prefix": "MyProject",
+    "auth_mode": "passthrough",
+    "github_owner": "YOUR-GITHUB-USERNAME",
+    "legacy_sse": False,
 }
 
 
@@ -100,12 +103,35 @@ def test_scaffold_custom_service_name_class_prefix(tmp_path):
         "project_slug": "my_awesome_tool",
         "service_name": "My Awesome Tool",
         "class_prefix": "MyAwesomeTool",
+        "auth_mode": "passthrough",
+        "github_owner": "YOUR-GITHUB-USERNAME",
+        "legacy_sse": False,
     }
     target = tmp_path / "my-awesome-tool"
     scaffold_project(target, context)
 
     errors_content = _read(target / "src" / "core" / "errors.py")
     assert "MyAwesomeTool" in errors_content
+
+
+def test_scaffold_server_json(tmp_path):
+    import json
+
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+    data = json.loads(_read(target / "server.json"))
+    assert data["name"] == "io.github.YOUR-GITHUB-USERNAME/my-project"
+    assert data["remotes"][0]["type"] == "streamable-http"
+    assert data["remotes"][0]["url"].endswith("/mcp")
+    assert "$schema" in data
+
+
+def test_scaffold_renames_github_dir(tmp_path):
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+    # Workflow template ships as templates/github/... and must land as .github/...
+    assert (target / ".github" / "workflows" / "publish-mcp.yml").exists()
+    assert not (target / "github").exists()
 
 
 def test_scaffold_non_empty_dir_raises(tmp_path):
@@ -126,3 +152,54 @@ def test_scaffold_empty_dir_succeeds(tmp_path):
     target.mkdir()
     scaffold_project(target, CONTEXT)
     assert (target / "src" / "server.py").exists()
+
+
+def test_default_scaffold_has_no_sse(tmp_path):
+    """Spec success criterion: zero /sse occurrences in default scaffold output."""
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+    offenders = []
+    for f in target.rglob("*"):
+        if (
+            f.is_file()
+            and f.suffix in {".py", ".md", ".json", ".toml", ".yml", ".html", ".example"}
+            and "/sse" in _read(f)
+        ):
+            offenders.append(f)
+    assert offenders == [], f"/sse found in: {offenders}"
+
+
+def test_legacy_sse_scaffold_mounts_both(tmp_path):
+    ctx = dict(CONTEXT, legacy_sse=True)
+    target = tmp_path / "legacy"
+    scaffold_project(target, ctx)
+    app_content = _read(target / "src" / "app.py")
+    assert '"/mcp"' in app_content
+    assert '"/sse"' in app_content
+    import json
+
+    mcp_json = json.loads(_read(target / "mcp.json"))
+    assert mcp_json["transport"] == "streamable-http"
+    assert mcp_json["url"].endswith("/mcp")
+
+
+def test_example_tool_mounted(tmp_path):
+    target = tmp_path / "my-project"
+    scaffold_project(target, CONTEXT)
+    server_content = _read(target / "src" / "server.py")
+    assert "from src.tools.example import example_router" in server_content
+    assert "mcp.mount(example_router)" in server_content
+    assert not any(
+        line.strip().startswith("#") and "mcp.mount(example_router)" in line
+        for line in server_content.splitlines()
+    )
+
+
+def test_scaffold_auth_mode_rendered(tmp_path):
+    ctx = dict(CONTEXT, auth_mode="none")
+    target = tmp_path / "none-mode"
+    scaffold_project(target, ctx)
+    assert 'auth_mode: str = "none"' in _read(target / "src" / "config" / "settings.py")
+    assert "AUTH_MODE=none" in _read(target / "env.example")
+    assert "verify_jwt" in _read(target / "src" / "core" / "auth.py")
+    assert "pyjwt" in _read(target / "pyproject.toml").lower()

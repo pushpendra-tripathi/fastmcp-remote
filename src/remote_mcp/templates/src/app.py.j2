@@ -27,14 +27,22 @@ logger = logging.getLogger(__name__)
 
 _OAUTH_DISCOVERY_PATHS = [
     "/.well-known/oauth-authorization-server",
+    "/.well-known/oauth-authorization-server/mcp",
+    "/mcp/.well-known/oauth-authorization-server",
+{%- if legacy_sse %}
     "/.well-known/oauth-authorization-server/sse",
     "/sse/.well-known/oauth-authorization-server",
+{%- endif %}
 ]
 
 _OAUTH_RESOURCE_PATHS = [
     "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-protected-resource/mcp",
+    "/mcp/.well-known/oauth-protected-resource",
+{%- if legacy_sse %}
     "/.well-known/oauth-protected-resource/sse",
     "/sse/.well-known/oauth-protected-resource",
+{%- endif %}
 ]
 
 
@@ -49,8 +57,42 @@ def create_app():
     """Create the combined Starlette + FastMCP ASGI application."""
     configure_logging()
     logger.info("{{ service_name }} MCP starting...")
+    if settings.auth_mode == "none":
+        logger.warning(
+            "AUTH_MODE=none — server accepts unauthenticated requests. Dev only."
+        )
+    if not (settings.allowed_origins or "").strip():
+        logger.warning(
+            "ALLOWED_ORIGINS not set — accepting requests from all origins. "
+            "Set ALLOWED_ORIGINS in production."
+        )
 
-    mcp_app = mcp.http_app(path="/sse")
+    mcp_app = mcp.http_app(path="/mcp")
+{%- if legacy_sse %}
+    # Deprecated SSE transport kept for legacy clients. Remove when unneeded.
+    sse_app = mcp.http_app(path="/sse", transport="sse")
+
+    async def transport_dispatch(scope, receive, send):
+        path = scope.get("path", "")
+        if path.startswith("/sse") or path.startswith("/messages"):
+            await sse_app(scope, receive, send)
+        else:
+            await mcp_app(scope, receive, send)
+
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with contextlib.AsyncExitStack() as stack:
+            await stack.enter_async_context(mcp_app.lifespan(app))
+            await stack.enter_async_context(sse_app.lifespan(app))
+            yield
+
+    transport_app = transport_dispatch
+{%- else %}
+    lifespan = mcp_app.lifespan
+    transport_app = mcp_app
+{%- endif %}
 
     routes = [
         Route("/health", health, methods=["GET"]),
@@ -65,16 +107,22 @@ def create_app():
             Middleware(
                 CORSMiddleware,
                 allow_origins=_allowed_origins(),
-                allow_methods=["*"],
-                allow_headers=["*"],
+                allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+                allow_headers=[
+                    "mcp-protocol-version",
+                    "mcp-session-id",
+                    "Authorization",
+                    "Content-Type",
+                ],
+                expose_headers=["mcp-session-id"],
             ),
             Middleware(RequireAuthMiddleware),
             Middleware(TelemetryMiddleware),
         ],
-        lifespan=mcp_app.lifespan,
+        lifespan=lifespan,
     )
 
-    _app.routes.append(Mount("/", app=mcp_app))
+    _app.routes.append(Mount("/", app=transport_app))
     return _app
 
 

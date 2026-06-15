@@ -43,7 +43,7 @@ FastMCP). LangChain refugees (different problem).
 Goal: get on the map. Cross 500 PyPI downloads/week, 100 GitHub stars.
 
 1. **streamable-http transport** alongside SSE. Add `--transport sse|http|both`
-   flag. Default `both`. (1d)
+   flag. Default `both`. (1d) — **DONE v0.3.0** (shipped as `/mcp` default + `--legacy-sse` opt-in, not `--transport both`).
 2. **One-click deploy buttons** in generated README: Render, Railway, Fly.io,
    Vercel. Pre-tested config files in template. (1d)
 3. **Polish demo path**: animated terminal recording (asciinema),
@@ -60,16 +60,13 @@ Goal: get on the map. Cross 500 PyPI downloads/week, 100 GitHub stars.
    `remote-mcp new --oauth=django-oauth-toolkit|auth0|clerk|cognito|custom`
    sets defaults. (1d)
 8. **Auth0 + Clerk + Cognito tutorials** in `docs/integrations/`. (2d)
+9. **Registry publishing** — generated `server.json` + `.github/workflows/publish-mcp.yml`. **DONE v0.3.0**.
 
 ### Phase 2 — Problem solver (4 weeks, ship v0.4.0)
 
 Goal: be the obvious choice. Cross 2k downloads/week, 300 stars.
 
-9.  **Backend recipes**:
-    `remote-mcp add backend stripe|github|notion|slack|hubspot`. Each
-    generates a tools file with 3–5 common operations, `.env.example` entries,
-    tests with respx mocks, and a README snippet. Start with 3 backends; add
-    more by demand. (1w)
+9.  **`remote-mcp from-openapi`**: generate a tools file from an OpenAPI spec — selected endpoints become MCP tools with auth, retry, and tests. Supersedes hand-maintained per-vendor recipes. (1w)
 10. **Compatibility matrix doc**: hand-tested support for Claude.ai web,
     Claude Desktop, Claude Code, ChatGPT, Cursor, Windsurf, Continue.
     Document quirks per client. (3d)

@@ -302,7 +302,7 @@
                     <li>In Claude, go to <strong>Settings → Connectors</strong>.</li>
                     <li>Click <strong>Add → Custom → Web</strong>.</li>
                     <li>Name: <code>{{ service_name }}</code></li>
-                    <li>Remote MCP Server URL: <code>{% raw %}{{ mcp_public_url }}{% endraw %}/sse</code></li>
+                    <li>Remote MCP Server URL: <code>{% raw %}{{ mcp_public_url }}{% endraw %}/mcp</code></li>
                     <li>Click <strong>Connect</strong> and follow the OAuth flow.</li>
                 </ol>
 
@@ -316,7 +316,7 @@
       "args": [
         "-y",
         "mcp-remote@latest",
-        "{% raw %}{{ mcp_public_url }}{% endraw %}/sse"
+        "{% raw %}{{ mcp_public_url }}{% endraw %}/mcp"
       ]
     }
   }
@@ -326,12 +326,12 @@
                 <!-- 3. Claude Code CLI -->
                 <h3>3. Connect via Claude Code (CLI)</h3>
                 <p>Add {{ service_name }} to your current project:</p>
-                <div class="code-block"><pre>claude mcp add {{ project_name }} --transport http {% raw %}{{ mcp_public_url }}{% endraw %}/sse</pre></div>
+                <div class="code-block"><pre>claude mcp add {{ project_name }} --transport http {% raw %}{{ mcp_public_url }}{% endraw %}/mcp</pre></div>
 
                 <!-- 4. Other clients -->
                 <h3>4. Other MCP Clients (Cursor, Windsurf, etc.)</h3>
                 <p>Point any MCP-compatible tool to:</p>
-                <div class="code-block"><pre>{% raw %}{{ mcp_public_url }}{% endraw %}/sse</pre></div>
+                <div class="code-block"><pre>{% raw %}{{ mcp_public_url }}{% endraw %}/mcp</pre></div>
             </div>
 
         </div>

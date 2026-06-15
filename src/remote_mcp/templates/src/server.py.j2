@@ -63,5 +63,7 @@ The token is obtained via OAuth 2.0 from the {{ service_name }} Identity Provide
 )
 
 # ── Mount tool/resource/skill routers here as they are built ─────────────────
-# from src.tools.example import example_router
-# mcp.mount(example_router)
+from src.tools.example import example_router  # noqa: E402
+
+mcp.mount(example_router)
+# Delete src/tools/example.py and the two lines above once you have real tools.
